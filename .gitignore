@@ -1,0 +1,37 @@
+# Gradle and build outputs
+.gradle/
+build/
+out/
+
+# Local Minecraft run directories
+run/
+run-server/
+logs/
+crash-reports/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# Local dependency binaries
+libs/*.jar
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials*.json
+secrets*.json
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# JVM crash logs
+hs_err_pid*.log

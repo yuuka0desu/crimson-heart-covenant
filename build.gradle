@@ -1,0 +1,72 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
+    id 'java'
+}
+
+version = mod_version
+group = 'com.narrafork.playermaid'
+
+base {
+    archivesName = 'player-maid'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+compileJava {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    options.encoding = 'UTF-8'
+}
+
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'info'
+            mods {
+                playermaid { source sourceSets.main }
+            }
+        }
+        server {
+            workingDirectory project.file('run-server')
+            property 'forge.logging.console.level', 'info'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', file('build/createSrgToMcp/output.srg').absolutePath
+            args '--nogui'
+            mods {
+                playermaid { source sourceSets.main }
+            }
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    compileOnly fg.deobf(files('libs/curios-forge-5.11.0+1.20.1.jar'))
+    compileOnly fg.deobf(files('libs/relics-1.20.1-0.8.0.9.jar'))
+    implementation fg.deobf(files('libs/touhoulittlemaid-1.5.2-forge+mc1.20.1.jar'))
+    compileOnly fg.deobf(files('libs/maidmarriage-2.2.0-forge+mc1.20.1.jar'))
+    compileOnly fg.deobf(files('libs/touhou-maid-affection-1.7.2.2.jar'))
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+jar {
+    manifest {
+        attributes([
+            'Specification-Title': mod_id,
+            'Specification-Vendor': 'NarraFork',
+            'Specification-Version': '1',
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.version,
+            'Implementation-Vendor': 'NarraFork',
+            'MixinConfigs': 'playermaid.mixins.json'
+        ])
+    }
+}
