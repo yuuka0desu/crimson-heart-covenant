@@ -6,6 +6,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class TeleportHelper {
@@ -15,8 +16,8 @@ public final class TeleportHelper {
             {2, 2}, {-2, 2}, {2, -2}, {-2, -2}
     };
 
-    public static void near(ServerPlayer maid, ServerPlayer owner) {
-        ServerLevel level = owner.serverLevel();
+    public static void near(ServerPlayer maid, LivingEntity owner) {
+        if (!(owner.level() instanceof ServerLevel level)) return;
         BlockPos origin = owner.blockPosition();
         for (int[] offset : OFFSETS) {
             BlockPos candidate = origin.offset(offset[0], 0, offset[1]);

@@ -1,5 +1,7 @@
 package com.narrafork.playermaid;
 
+import net.minecraft.resources.ResourceLocation;
+
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
@@ -81,5 +83,15 @@ public enum WorkMode {
         if (id == null) return Optional.empty();
         String normalized = id.toLowerCase(Locale.ROOT);
         return Arrays.stream(values()).filter(mode -> mode.id.equals(normalized)).findFirst();
+    }
+
+    public static Optional<WorkMode> byTaskUid(ResourceLocation uid) {
+        if (uid == null || !("touhou_little_maid".equals(uid.getNamespace())
+                || PlayerMaid.MOD_ID.equals(uid.getNamespace()))) return Optional.empty();
+        return byId(uid.getPath());
+    }
+
+    public ResourceLocation taskUid() {
+        return new ResourceLocation("touhou_little_maid", id);
     }
 }

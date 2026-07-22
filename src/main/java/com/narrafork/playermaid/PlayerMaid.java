@@ -21,10 +21,13 @@ public final class PlayerMaid {
     public PlayerMaid() {
         var modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModMenus.register(modBus);
+        ModEntities.register(modBus);
+        modBus.addListener(this::onEntityAttributes);
+        MaidNetwork.register();
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, MaidConfig.SPEC, "player-maid-server.toml");
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> modBus.addListener(this::onClientSetup));
         MinecraftForge.EVENT_BUS.register(new MaidEvents());
-        LOGGER.info("车万女仆：绯心待契 2.3 已加载");
+        LOGGER.info("车万女仆：绯心待契 2.0.0 已加载");
     }
 
     private void onEntityAttributes(net.minecraftforge.event.entity.EntityAttributeCreationEvent event) {

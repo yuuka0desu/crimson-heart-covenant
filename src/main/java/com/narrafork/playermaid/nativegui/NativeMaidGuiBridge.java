@@ -40,10 +40,18 @@ public final class NativeMaidGuiBridge {
     };
 
     public static boolean open(ServerPlayer owner, ServerPlayer target) {
-        if (!MaidConfig.GUI_ENABLED.get() || !MaidData.ownedBy(target, owner)
+        if (!MaidConfig.GUI_ENABLED.get() || !com.narrafork.playermaid.RelationshipService.canManage(owner, target)
                 || owner.serverLevel() != target.serverLevel()) return false;
         double range = MaidConfig.GUI_INTERACTION_DISTANCE.get();
         if (owner.distanceToSqr(target) > range * range) return false;
+        Session occupied = SESSIONS.values().stream()
+                .filter(session -> session.targetId.equals(target.getUUID()) && !session.ownerId.equals(owner.getUUID()))
+                .findFirst().orElse(null);
+        if (occupied != null) {
+            owner.sendSystemMessage(Component.translatable("message.playermaid.gui.target_busy",
+                    target.getGameProfile().getName()));
+            return false;
+        }
 
         close(owner.getUUID());
         PlayerMaidGuiProxy proxy = new PlayerMaidGuiProxy(owner.serverLevel());
@@ -115,7 +123,7 @@ public final class NativeMaidGuiBridge {
     }
 
     private static boolean valid(ServerPlayer owner, ServerPlayer target, PlayerMaidGuiProxy proxy) {
-        if (owner == null || target == null || proxy.isRemoved() || !MaidData.ownedBy(target, owner)
+        if (owner == null || target == null || proxy.isRemoved() || !com.narrafork.playermaid.RelationshipService.canManage(owner, target)
                 || owner.serverLevel() != target.serverLevel() || proxy.level() != target.level()) return false;
         double range = MaidConfig.GUI_INTERACTION_DISTANCE.get();
         return owner.distanceToSqr(target) <= range * range;
@@ -166,13 +174,13 @@ public final class NativeMaidGuiBridge {
         MaidData.setOpenFenceGate(target, config.isOpenFenceGate());
         MaidData.setActiveClimbing(target, config.isActiveClimbing());
         if (session.proxy.getTask() != null) {
-            WorkMode.byId(session.proxy.getTask().getUid().getPath()).ifPresent(mode -> WorkManager.setMode(target, mode));
+            WorkMode.byTaskUid(session.proxy.getTask().getUid()).ifPresent(mode -> WorkManager.setMode(target, mode));
         }
     }
 
     private static java.util.Optional<IMaidTask> findTask(WorkMode mode) {
         return TaskManager.getTaskMap().entrySet().stream()
-                .filter(entry -> entry.getKey().getPath().equals(mode.id())).map(Map.Entry::getValue).findFirst();
+                .filter(entry -> entry.getKey().equals(mode.taskUid())).map(Map.Entry::getValue).findFirst();
     }
 
     private static void copyInventoryToProxy(ServerPlayer target, PlayerMaidGuiProxy proxy) {

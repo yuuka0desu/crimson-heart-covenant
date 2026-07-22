@@ -1,11 +1,16 @@
 package com.narrafork.playermaid;
 
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.narrafork.playermaid.nativegui.PlayerMaidGuiProxy;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -27,11 +32,52 @@ public final class TouhouMaidCompat {
             "computer", "keyboard", "bookshelf", "shrine", "maid_beacon", "model_switcher"
     );
 
+    public static boolean tryContractWithEntityMaid(ServerPlayer player, EntityMaid maid) {
+        if (!MaidConfig.ENTITY_MAID_CONTRACTS.get() || maid instanceof PlayerMaidGuiProxy
+                || !player.isShiftKeyDown() || !player.getMainHandItem().is(net.minecraft.world.item.Items.CAKE)) {
+            return false;
+        }
+        if (MaidData.isMaid(player)) {
+            player.sendSystemMessage(Component.translatable("message.playermaid.entity_contract.already_bound")
+                    .withStyle(ChatFormatting.RED));
+            return true;
+        }
+        if (!maid.isAlive() || !maid.isTame() || maid.getOwnerUUID() == null) {
+            player.sendSystemMessage(Component.translatable("message.playermaid.entity_contract.untamed")
+                    .withStyle(ChatFormatting.RED));
+            return true;
+        }
+        if (!MaidData.bindToMaid(player, maid)) {
+            player.sendSystemMessage(Component.translatable("message.playermaid.entity_contract.cycle")
+                    .withStyle(ChatFormatting.RED));
+            return true;
+        }
+        if (MaidConfig.CONSUME_CAKE.get() && !player.isCreative()) player.getMainHandItem().shrink(1);
+        AddonRelationshipData.clear(player);
+        AddonRelationshipData.setFavorability(player, 0);
+        AddonRelationshipData.setMood(player, 0);
+        WorkManager.clear(player);
+        WorkManager.setMode(player, WorkMode.IDLE);
+        WorkManager.setAuto(player, false);
+        player.serverLevel().sendParticles(ParticleTypes.HEART, player.getX(), player.getY() + 1.0,
+                player.getZ(), 12, 0.5, 0.8, 0.5, 0.05);
+        player.serverLevel().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP,
+                SoundSource.PLAYERS, 0.8F, 1.25F);
+        player.sendSystemMessage(Component.translatable("message.playermaid.entity_contract.success", maid.getName())
+                .withStyle(ChatFormatting.LIGHT_PURPLE));
+        ServerPlayer topOwner = player.getServer().getPlayerList().getPlayer(maid.getOwnerUUID());
+        if (topOwner != null) topOwner.sendSystemMessage(Component.translatable(
+                        "message.playermaid.entity_contract.owner", player.getDisplayName(), maid.getName())
+                .withStyle(ChatFormatting.AQUA));
+        MaidTaskSync.syncNow(maid);
+        return true;
+    }
+
     public static boolean tryBindPlayerMaid(ServerPlayer owner, ServerPlayer target) {
         ItemStack stack = owner.getMainHandItem();
         if (!isEmptySmartSlab(stack)) return false;
 
-        if (!MaidData.ownedBy(target, owner)) {
+        if (!RelationshipService.canManage(owner, target)) {
             owner.sendSystemMessage(Component.translatable("message.playermaid.smart_slab.not_owned")
                     .withStyle(ChatFormatting.RED));
             return true;
@@ -127,7 +173,7 @@ public final class TouhouMaidCompat {
             owner.getCooldowns().addCooldown(stack.getItem(), 20);
             return true;
         }
-        if (!MaidData.ownedBy(maid, owner)) {
+        if (!RelationshipService.canManage(owner, maid)) {
             owner.sendSystemMessage(Component.translatable("message.playermaid.smart_slab.relation_invalid", targetName)
                     .withStyle(ChatFormatting.RED));
             owner.getCooldowns().addCooldown(stack.getItem(), 20);

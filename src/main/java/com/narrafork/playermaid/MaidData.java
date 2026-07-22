@@ -1,5 +1,6 @@
 package com.narrafork.playermaid;
 
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,6 +13,7 @@ public final class MaidData {
     private static final String ROOT = "PlayerMaidData";
     private static final String OWNER_UUID = "OwnerUuid";
     private static final String OWNER_NAME = "OwnerName";
+    private static final String MANAGER_TYPE = "ManagerType";
     private static final String MODE = "Mode";
     private static final String STAY_DIMENSION = "StayDimension";
     private static final String STAY_X = "StayX";
@@ -89,6 +91,25 @@ public final class MaidData {
         return root(player).getString(OWNER_NAME);
     }
 
+    /** 旧存档没有 ManagerType 时按 PLAYER 解释。 */
+    public static Optional<RelationshipNodeType> managerType(Player player) {
+        if (ownerUuid(player).isEmpty()) return Optional.empty();
+        String value = root(player).getString(MANAGER_TYPE);
+        if (value.isBlank()) return Optional.of(RelationshipNodeType.PLAYER);
+        try {
+            return Optional.of(RelationshipNodeType.valueOf(value));
+        } catch (IllegalArgumentException ignored) {
+            return Optional.of(RelationshipNodeType.PLAYER);
+        }
+    }
+
+    public static Optional<RelationshipNode> directManager(Player player) {
+        Optional<UUID> uuid = ownerUuid(player);
+        Optional<RelationshipNodeType> type = managerType(player);
+        if (uuid.isEmpty() || type.isEmpty()) return Optional.empty();
+        return Optional.of(new RelationshipNode(type.get(), uuid.get()));
+    }
+
     public static Mode mode(Player player) {
         try {
             return Mode.valueOf(root(player).getString(MODE));
@@ -97,10 +118,24 @@ public final class MaidData {
         }
     }
 
+    /** 兼容旧调用；关系同时写入世界 SavedData。 */
     public static void bind(ServerPlayer maid, ServerPlayer owner) {
+        bindToPlayer(maid, owner);
+    }
+
+    public static boolean bindToPlayer(ServerPlayer maid, ServerPlayer manager) {
+        return RelationshipService.bindToPlayer(maid, manager);
+    }
+
+    public static boolean bindToMaid(ServerPlayer maid, EntityMaid manager) {
+        return RelationshipService.bindToMaid(maid, manager);
+    }
+
+    static void writeManager(ServerPlayer maid, RelationshipNode manager, String managerName) {
         CompoundTag tag = writableRoot(maid);
-        tag.putString(OWNER_UUID, owner.getUUID().toString());
-        tag.putString(OWNER_NAME, owner.getGameProfile().getName());
+        tag.putString(OWNER_UUID, manager.uuid().toString());
+        tag.putString(OWNER_NAME, managerName);
+        tag.putString(MANAGER_TYPE, manager.type().name());
         tag.putString(MODE, Mode.FOLLOW.name());
         if (!tag.contains(ACTIVITY_RANGE)) {
             tag.putDouble(ACTIVITY_RANGE, clampActivityRange(MaidConfig.AUTO_WORK_RANGE.get()));
@@ -196,7 +231,16 @@ public final class MaidData {
         return tag.contains(key) ? tag.getBoolean(key) : fallback;
     }
 
+    /** 清理在线玩家女仆时同步移除世界关系边。 */
     public static void clear(Player maid) {
+        if (maid instanceof ServerPlayer serverPlayer) {
+            RelationshipService.clear(serverPlayer);
+        } else {
+            clearLocal(maid);
+        }
+    }
+
+    static void clearLocal(Player maid) {
         CompoundTag persisted = maid.getPersistentData().getCompound(Player.PERSISTED_NBT_TAG);
         persisted.remove(ROOT);
         persisted.remove(AddonRelationshipData.ROOT);
@@ -246,7 +290,8 @@ public final class MaidData {
     }
 
     public static boolean ownedBy(Player maid, Player owner) {
-        return ownerUuid(maid).map(owner.getUUID()::equals).orElse(false);
+        return managerType(maid).filter(type -> type == RelationshipNodeType.PLAYER).isPresent()
+                && ownerUuid(maid).map(owner.getUUID()::equals).orElse(false);
     }
 
     private static void clearStayPoint(CompoundTag tag) {

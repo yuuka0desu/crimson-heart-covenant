@@ -1,5 +1,7 @@
 package com.narrafork.playermaid;
 
+import com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.ClickEvent;
@@ -8,6 +10,7 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -35,10 +38,15 @@ public final class MaidEvents {
 
     @SubscribeEvent
     public void onPlayerInteract(PlayerInteractEvent.EntityInteract event) {
-        if (event.getHand() != InteractionHand.MAIN_HAND || !(event.getEntity() instanceof ServerPlayer owner)
-                || !(event.getTarget() instanceof ServerPlayer target)) {
+        if (event.getHand() != InteractionHand.MAIN_HAND || !(event.getEntity() instanceof ServerPlayer owner)) return;
+        if (event.getTarget() instanceof EntityMaid entityMaid) {
+            if (TouhouMaidCompat.tryContractWithEntityMaid(owner, entityMaid)) {
+                event.setCanceled(true);
+                event.setCancellationResult(InteractionResult.SUCCESS);
+            }
             return;
         }
+        if (!(event.getTarget() instanceof ServerPlayer target)) return;
 
         if (MaidConfig.TOUHOU_COMPAT.get() && ModList.get().isLoaded("touhou_little_maid")
                 && TouhouMaidCompat.tryBindPlayerMaid(owner, target)) {
@@ -53,7 +61,7 @@ public final class MaidEvents {
             return;
         }
 
-        if (MaidData.ownedBy(target, owner)) {
+        if (RelationshipService.canManage(owner, target)) {
             if (!NativeMaidGuiBridge.open(owner, target)) {
                 owner.sendSystemMessage(Component.literal("当前不能打开玩家女仆原生面板。").withStyle(ChatFormatting.RED));
             }
@@ -99,7 +107,7 @@ public final class MaidEvents {
     public void onEntityMount(EntityMountEvent event) {
         if (!event.isMounting() || !(event.getEntityMounting() instanceof ServerPlayer owner)
                 || !(event.getEntityBeingMounted() instanceof ServerPlayer maid) || owner == maid) return;
-        if (!MaidConfig.MAID_UI_ALLOW_OWNER_RIDE.get() || !MaidData.ownedBy(maid, owner) || !MaidData.rideable(maid)) event.setCanceled(true);
+        if (!MaidConfig.MAID_UI_ALLOW_OWNER_RIDE.get() || !RelationshipService.canManage(owner, maid) || !MaidData.rideable(maid)) event.setCanceled(true);
     }
 
     @SubscribeEvent
@@ -117,6 +125,11 @@ public final class MaidEvents {
     }
 
     @SubscribeEvent
+    public void onMaidTick(MaidTickEvent event) {
+        MaidTaskSync.tick(event.getMaid());
+    }
+
+    @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
         WorkManager.tick(player);
@@ -124,11 +137,10 @@ public final class MaidEvents {
         if (player.tickCount % 20 != 0) return;
 
         if (MaidData.isMaid(player)) {
-            ServerPlayer owner = MaidData.ownerUuid(player)
-                    .map(uuid -> player.getServer().getPlayerList().getPlayer(uuid)).orElse(null);
+            LivingEntity owner = RelationshipService.resolveDirectManager(player).orElse(null);
             String modeName = MaidData.mode(player) == MaidData.Mode.FOLLOW ? "跟随" : "待命";
             if (MaidConfig.SHOW_STATUS_BAR.get()) {
-                String ownerState = owner == null ? MaidData.ownerName(player) + "（离线）" : owner.getGameProfile().getName();
+                String ownerState = owner == null ? MaidData.ownerName(player) + "（离线）" : owner.getName().getString();
                 player.displayClientMessage(Component.literal("女仆 | 主人：" + ownerState + " | 模式：" + modeName
                                 + " | 工作：" + WorkManager.getMode(player).chineseName()
                                 + " | 自动：" + (WorkManager.isAuto(player) ? "开" : "关")
@@ -151,12 +163,12 @@ public final class MaidEvents {
         }
     }
 
-    private void enforceMode(ServerPlayer maid, ServerPlayer owner) {
+    private void enforceMode(ServerPlayer maid, LivingEntity owner) {
         if (MaidData.isActivityRangeUnlimited(maid)) return;
         double activityRange = MaidData.activityRange(maid);
         if (MaidData.mode(maid) == MaidData.Mode.FOLLOW) {
             if (owner == null) return;
-            if (maid.serverLevel() != owner.serverLevel() || maid.distanceToSqr(owner) > activityRange * activityRange) {
+            if (maid.serverLevel() != owner.level() || maid.distanceToSqr(owner) > activityRange * activityRange) {
                 TeleportHelper.near(maid, owner);
             }
             return;
@@ -190,6 +202,7 @@ public final class MaidEvents {
     public void onLivingDeath(LivingDeathEvent event) {
         MaidBaubleEffects.onDeath(event);
         if (event.getEntity() instanceof ServerPlayer maid) LittleMadCompat.onDeath(maid);
+        if (event.getEntity() instanceof EntityMaid maid) MaidTaskSync.onDeath(maid);
     }
 
     @SubscribeEvent
@@ -207,7 +220,7 @@ public final class MaidEvents {
                 || !(event.getSource().getEntity() instanceof ServerPlayer attacker)) {
             return;
         }
-        if (MaidData.ownedBy(victim, attacker) || MaidData.ownedBy(attacker, victim)) {
+        if (RelationshipService.canManage(attacker, victim) || RelationshipService.canManage(victim, attacker)) {
             event.setCanceled(true);
             attacker.displayClientMessage(Component.literal("主人与自己的女仆之间已关闭友伤。")
                     .withStyle(ChatFormatting.YELLOW), true);
@@ -220,6 +233,11 @@ public final class MaidEvents {
         if (!oldPersisted.isEmpty()) {
             event.getEntity().getPersistentData().put(Player.PERSISTED_NBT_TAG, oldPersisted.copy());
         }
+    }
+
+    @SubscribeEvent
+    public void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) MaidTaskSync.migratePlayer(player);
     }
 
     @SubscribeEvent

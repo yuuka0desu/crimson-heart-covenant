@@ -15,6 +15,11 @@ public final class MaidConfig {
     public static final ForgeConfigSpec.IntValue AUTO_WORK_INTERVAL;
     public static final ForgeConfigSpec.DoubleValue AUTO_WORK_RANGE;
     public static final ForgeConfigSpec.BooleanValue TOUHOU_COMPAT;
+    public static final ForgeConfigSpec.BooleanValue ENTITY_MAID_CONTRACTS;
+    public static final ForgeConfigSpec.BooleanValue INHERIT_MANAGEMENT;
+    public static final ForgeConfigSpec.BooleanValue SYNC_MAID_TASKS;
+    public static final ForgeConfigSpec.BooleanValue CLEAR_CONTRACTS_ON_MAID_DEATH;
+    public static final ForgeConfigSpec.IntValue MAX_RELATION_DEPTH;
     public static final ForgeConfigSpec.BooleanValue MAID_MARRIAGE_COMPAT;
     public static final ForgeConfigSpec.BooleanValue MAID_AFFECTION_COMPAT;
     public static final ForgeConfigSpec.BooleanValue LITTLE_MAD_COMPAT;
@@ -89,6 +94,16 @@ public final class MaidConfig {
                 .defineInRange("autoWorkRange", 8.0, 2.0, 32.0);
         TOUHOU_COMPAT = builder.comment("启用车万女仆床、家具和功能道具适配")
                 .define("touhouCompat", true);
+        ENTITY_MAID_CONTRACTS = builder.comment("允许玩家潜行手持蛋糕右键已驯服 Maid，成为该实体的玩家女仆")
+                .define("entityMaidContracts", true);
+        INHERIT_MANAGEMENT = builder.comment("允许上级主人继承管理所有玩家女仆后代")
+                .define("inheritManagement", true);
+        SYNC_MAID_TASKS = builder.comment("Maid 实体切换任务时自动同步给关系树中的玩家女仆并开启自动工作")
+                .define("syncMaidTasks", true);
+        CLEAR_CONTRACTS_ON_MAID_DEATH = builder.comment("Maid 实体死亡时解除其直接玩家女仆契约")
+                .define("clearContractsOnMaidDeath", true);
+        MAX_RELATION_DEPTH = builder.comment("从属关系最大解析深度，用于阻止环路和异常长关系链")
+                .defineInRange("maxRelationDepth", 64, 2, 256);
         builder.pop();
 
         builder.push("addonCompat");

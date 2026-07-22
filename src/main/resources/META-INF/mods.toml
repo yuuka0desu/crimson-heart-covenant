@@ -9,7 +9,7 @@ displayName="车万女仆：绯心待契"
 logoFile="playermaid.png"
 authors="NarraFork"
 description='''
-允许玩家通过请求机制与其他玩家建立主人—女仆关系，并提供跟随、待命、召回、保护和管理命令。
+允许玩家与其他玩家或车万女仆 Maid 实体建立双向契约，并提供层级从属、任务同步、跟随、召回、保护与继承管理。
 '''
 
 [[dependencies.playermaid]]

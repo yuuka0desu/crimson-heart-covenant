@@ -119,7 +119,7 @@ public final class MaidInventoryScreen extends AbstractContainerScreen<MaidInven
             case MAIN -> {
                 graphics.drawString(font, Component.translatable("screen.playermaid.health", (int) snapshot.health(), (int) snapshot.maxHealth()), 133, 52, color, false);
                 graphics.drawString(font, Component.translatable("screen.playermaid.armor_level", snapshot.armor(), snapshot.experienceLevel()), 133, 64, color, false);
-                graphics.drawString(font, Component.translatable("screen.playermaid.work", Component.translatable("playermaid.work." + snapshot.workMode().id())), 133, 76, color, false);
+                graphics.drawString(font, Component.translatable("screen.playermaid.work", snapshot.taskName()), 133, 76, color, false);
                 graphics.drawString(font, Component.translatable("screen.playermaid.favor", snapshot.favorability()), 133, 88, color, false);
                 graphics.drawString(font, Component.translatable("screen.playermaid.relation", Component.translatable("playermaid.relation." + snapshot.relation().name().toLowerCase())), 133, 100, color, false);
                 graphics.drawString(font, Component.translatable("screen.playermaid.mood", Component.translatable("playermaid.mood." + snapshot.mood().name().toLowerCase())), 133, 112, color, false);
@@ -130,7 +130,7 @@ public final class MaidInventoryScreen extends AbstractContainerScreen<MaidInven
                 graphics.drawString(font, Component.translatable("screen.playermaid.schedule.state", Component.translatable("playermaid.schedule." + snapshot.schedule().name().toLowerCase())), 76, 231, color, false);
             }
             case TASK -> {
-                graphics.drawString(font, Component.translatable("screen.playermaid.task.current", Component.translatable("playermaid.work." + snapshot.workMode().id())), 58, 49, color, false);
+                graphics.drawString(font, Component.translatable("screen.playermaid.task.current", snapshot.taskName() + " [" + snapshot.taskUid() + "]"), 58, 49, color, false);
                 graphics.drawString(font, Component.translatable("screen.playermaid.auto.state", onOff(snapshot.autoWork())), 58, 65, color, false);
                 graphics.drawWordWrap(font, Component.translatable("screen.playermaid.task.hint"), 58, 88, 180, color);
             }

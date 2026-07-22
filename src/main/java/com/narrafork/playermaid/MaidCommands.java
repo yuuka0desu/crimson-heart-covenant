@@ -140,7 +140,7 @@ public final class MaidCommands {
             if (slot < 0) return false;
             owner.getInventory().getItem(slot).shrink(1);
         }
-        MaidData.bind(maid, owner);
+        if (!MaidData.bindToPlayer(maid, owner)) return false;
         AddonRelationshipData.clear(maid);
         AddonRelationshipData.setFavorability(maid, 0);
         AddonRelationshipData.setMood(maid, 0);
@@ -192,7 +192,14 @@ public final class MaidCommands {
             return 1;
         }
         String mode = MaidData.mode(player) == MaidData.Mode.FOLLOW ? "跟随" : "待命";
-        Component message = Component.literal("主人：" + MaidData.ownerName(player) + "，模式：" + mode
+        String managerKind = MaidData.managerType(player).map(type -> type == RelationshipNodeType.TLM_MAID
+                ? "Maid实体" : "玩家").orElse("未知");
+        String topManager = RelationshipService.ancestors(player.getServer(), RelationshipNode.player(player.getUUID())).stream()
+                .filter(node -> node.type() == RelationshipNodeType.PLAYER).reduce((first, second) -> second)
+                .map(node -> player.getServer().getProfileCache().get(node.uuid()).map(profile -> profile.getName()).orElse(node.uuid().toString()))
+                .orElse("无");
+        Component message = Component.literal("直接主人：" + MaidData.ownerName(player) + "（" + managerKind + "），顶层主人："
+                        + topManager + "，模式：" + mode
                         + "，范围：" + MaidData.activityRangeText(player)
                         + "，" + WorkManager.statusText(player)
                         + "，" + AddonRelationshipData.status(player)
@@ -229,7 +236,7 @@ public final class MaidCommands {
     private static int showOtherRange(CommandSourceStack source, ServerPlayer maid)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         Component message = Component.literal(maid.getGameProfile().getName() + " 的活动范围："
                         + MaidData.activityRangeText(maid) + " ")
                 .withStyle(ChatFormatting.AQUA).append(rangeControls(maid, false));
@@ -240,14 +247,14 @@ public final class MaidCommands {
     private static int setOtherRange(CommandSourceStack source, ServerPlayer maid, double range)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         return applyRange(source, maid, range, true);
     }
 
     private static int setOtherRangeUnlimited(CommandSourceStack source, ServerPlayer maid)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         return applyRange(source, maid, MaidData.UNLIMITED_ACTIVITY_RANGE, true);
     }
 
@@ -299,14 +306,14 @@ public final class MaidCommands {
     private static int leave(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer maid = source.getPlayerOrException();
         if (!MaidData.isMaid(maid)) return fail(source, "你当前没有主人。");
-        ServerPlayer owner = MaidData.ownerUuid(maid)
-                .map(uuid -> source.getServer().getPlayerList().getPlayer(uuid)).orElse(null);
+        net.minecraft.world.entity.LivingEntity directManager = RelationshipService.resolveDirectManager(maid).orElse(null);
         MaidBaubleInventory.returnAll(maid);
         MaidData.clear(maid);
         AddonRelationshipData.clear(maid);
         WorkManager.clear(maid);
         source.sendSuccess(() -> Component.literal("你已解除女仆关系。"), false);
-        if (owner != null) owner.sendSystemMessage(Component.literal(maid.getGameProfile().getName() + " 已解除女仆关系。"));
+        if (directManager instanceof ServerPlayer owner) owner.sendSystemMessage(
+                Component.literal(maid.getGameProfile().getName() + " 已解除女仆关系。"));
         return 1;
     }
 
@@ -316,7 +323,9 @@ public final class MaidCommands {
         if (maids.isEmpty()) return fail(source, "当前没有在线女仆。");
         List<String> names = new ArrayList<>();
         for (ServerPlayer maid : maids) {
-            names.add(maid.getGameProfile().getName() + "[" + (MaidData.mode(maid) == MaidData.Mode.FOLLOW ? "跟随" : "待命")
+            String level = RelationshipService.isDirectManager(owner, maid) ? "直接" : "继承";
+            names.add(maid.getGameProfile().getName() + "[" + level + "，"
+                    + (MaidData.mode(maid) == MaidData.Mode.FOLLOW ? "跟随" : "待命")
                     + "，范围" + MaidData.activityRangeText(maid) + "]");
         }
         source.sendSuccess(() -> Component.literal("在线女仆：" + String.join("、", names)).withStyle(ChatFormatting.LIGHT_PURPLE), false);
@@ -325,7 +334,7 @@ public final class MaidCommands {
 
     private static int follow(CommandSourceStack source, ServerPlayer maid) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         MaidData.setFollow(maid);
         maid.sendSystemMessage(Component.literal("主人将你的模式设为：跟随").withStyle(ChatFormatting.AQUA));
         source.sendSuccess(() -> Component.literal("已让 " + maid.getGameProfile().getName() + " 跟随。"), false);
@@ -334,7 +343,7 @@ public final class MaidCommands {
 
     private static int stay(CommandSourceStack source, ServerPlayer maid) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         MaidData.setStay(maid);
         maid.sendSystemMessage(Component.literal("主人将你的模式设为：待命").withStyle(ChatFormatting.YELLOW));
         source.sendSuccess(() -> Component.literal("已让 " + maid.getGameProfile().getName() + " 在当前位置待命。"), false);
@@ -343,7 +352,7 @@ public final class MaidCommands {
 
     private static int summon(CommandSourceStack source, ServerPlayer maid) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         MaidData.setFollow(maid);
         TeleportHelper.near(maid, owner);
         maid.sendSystemMessage(Component.literal("主人召回了你。").withStyle(ChatFormatting.AQUA));
@@ -353,7 +362,7 @@ public final class MaidCommands {
 
     private static int release(CommandSourceStack source, ServerPlayer maid) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.isDirectManager(owner, maid)) return fail(source, "只有直接主人可以解除这段女仆关系。");
         MaidBaubleInventory.returnAll(maid);
         MaidData.clear(maid);
         AddonRelationshipData.clear(maid);
@@ -366,7 +375,7 @@ public final class MaidCommands {
     private static int openInventory(CommandSourceStack source, ServerPlayer maid, ViewType viewType)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         if (!MaidConfig.ALLOW_OWNER_INVENTORY_MANAGEMENT.get()) return fail(source, "服务器已关闭库存管理功能。");
         MaidInventoryMenu.open(owner, maid, viewType);
         return 1;
@@ -375,7 +384,7 @@ public final class MaidCommands {
     private static int requestWork(CommandSourceStack source, ServerPlayer maid, String modeId)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         WorkMode mode = WorkMode.byId(modeId).orElse(null);
         if (mode == null) return fail(source, "未知工作模式：" + modeId);
         WorkRequests.create(owner, maid, mode, MaidConfig.REQUEST_TIMEOUT_SECONDS.get() * 20L);
@@ -397,9 +406,10 @@ public final class MaidCommands {
         ServerPlayer maid = source.getPlayerOrException();
         WorkRequests.Request request = WorkRequests.get(maid).orElse(null);
         if (request == null) return fail(source, "当前没有有效的工作请求。");
-        if (!MaidData.ownerUuid(maid).map(request.ownerUuid()::equals).orElse(false)) {
+        if (!RelationshipService.canManage(source.getServer(), RelationshipNode.player(request.ownerUuid()),
+                RelationshipNode.player(maid.getUUID()))) {
             WorkRequests.remove(maid);
-            return fail(source, "工作请求的主人与当前绑定关系不符。");
+            return fail(source, "工作请求者当前已没有管理权限。");
         }
         WorkRequests.remove(maid);
         WorkManager.setMode(maid, request.mode());
@@ -435,7 +445,7 @@ public final class MaidCommands {
     private static int setOtherAuto(CommandSourceStack source, ServerPlayer maid, boolean enabled)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         WorkManager.setAuto(maid, enabled);
         maid.sendSystemMessage(Component.literal("主人将你的混合自动工作设为：" + (enabled ? "开启" : "关闭")));
         source.sendSuccess(() -> Component.literal("已设置 " + maid.getGameProfile().getName() + " 的自动工作。"), false);
@@ -445,7 +455,7 @@ public final class MaidCommands {
     private static int bindBed(CommandSourceStack source, ServerPlayer maid)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         if (!TouhouMaidCompat.bindLookedAtBed(owner, maid)) return fail(source, "请站在女仆附近并看向 6 格内的车万女仆床。");
         maid.sendSystemMessage(Component.literal("主人为你绑定了一张车万女仆床。").withStyle(ChatFormatting.LIGHT_PURPLE));
         source.sendSuccess(() -> Component.literal("女仆床绑定完成。"), false);
@@ -455,7 +465,7 @@ public final class MaidCommands {
     private static int sendToBed(CommandSourceStack source, ServerPlayer maid)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         if (!TouhouMaidCompat.sendToBed(maid)) return fail(source, "该女仆还没有绑定有效的女仆床。");
         source.sendSuccess(() -> Component.literal("已让 " + maid.getGameProfile().getName() + " 返回绑定床休息。"), false);
         return 1;
@@ -482,7 +492,7 @@ public final class MaidCommands {
     private static int relation(CommandSourceStack source, ServerPlayer maid)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner) && maid != owner) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.canManage(owner, maid) && maid != owner) return fail(source, "该玩家不是你的女仆。");
         source.sendSuccess(() -> Component.literal(maid.getGameProfile().getName() + " | "
                 + AddonRelationshipData.status(maid)).withStyle(ChatFormatting.LIGHT_PURPLE), false);
         return 1;
@@ -491,7 +501,7 @@ public final class MaidCommands {
     private static int bond(CommandSourceStack source, ServerPlayer maid)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.isDirectManager(owner, maid)) return fail(source, "羁绊只对直接的玩家主从关系开放。");
         String unlocked = AddonRelationshipData.abilities(maid).stream()
                 .map(TouhouMaidAffectionCompat::displayName).reduce((a, b) -> a + "、" + b).orElse("无");
         source.sendSuccess(() -> Component.literal("羁绊等级：" + AddonRelationshipData.bondLevel(maid)
@@ -503,7 +513,7 @@ public final class MaidCommands {
     private static int unlockBond(CommandSourceStack source, ServerPlayer maid, String ability)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer owner = source.getPlayerOrException();
-        if (!MaidData.ownedBy(maid, owner)) return fail(source, "该玩家不是你的女仆。");
+        if (!RelationshipService.isDirectManager(owner, maid)) return fail(source, "羁绊只对直接的玩家主从关系开放。");
         if (!TouhouMaidAffectionCompat.unlock(owner, maid, ability)) {
             return fail(source, "能力不存在、已经解锁，或羁绊等级/P点不足。需要 "
                     + TouhouMaidAffectionCompat.cost(ability) + " P点。");
@@ -546,7 +556,7 @@ public final class MaidCommands {
     public static List<ServerPlayer> onlineMaids(ServerPlayer owner) {
         List<ServerPlayer> result = new ArrayList<>();
         for (ServerPlayer player : owner.getServer().getPlayerList().getPlayers()) {
-            if (MaidData.ownedBy(player, owner)) result.add(player);
+            if (RelationshipService.canManage(owner, player)) result.add(player);
         }
         return result;
     }

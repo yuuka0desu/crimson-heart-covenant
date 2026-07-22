@@ -55,6 +55,11 @@ dependencies {
     compileOnly fg.deobf(files('libs/maidmarriage-2.2.0-forge+mc1.20.1.jar'))
     compileOnly fg.deobf(files('libs/touhou-maid-affection-1.7.2.2.jar'))
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 jar {

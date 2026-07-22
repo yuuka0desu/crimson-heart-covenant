@@ -21,7 +21,7 @@ import java.util.function.Supplier;
 
 /** 玩家女仆主界面的服务端权威操作与快照同步。 */
 public final class MaidNetwork {
-    private static final String VERSION = "1";
+    private static final String VERSION = "2";
     private static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(PlayerMaid.MOD_ID, "maid_ui"))
             .networkProtocolVersion(() -> VERSION)
@@ -40,6 +40,7 @@ public final class MaidNetwork {
 
     public record Snapshot(UUID maidId, String maidName, boolean home, boolean pickup, boolean rideable,
                            MaidData.Schedule schedule, boolean autoWork, WorkMode workMode,
+                           String taskUid, String taskName, String managerType,
                            boolean showBackpack, boolean showBackItem, boolean showChatBubble,
                            int soundFreq, int pickType, boolean openDoor, boolean openFenceGate,
                            boolean activeClimbing, float health, float maxHealth, int armor, int experienceLevel,
@@ -49,6 +50,8 @@ public final class MaidNetwork {
             return new Snapshot(maid.getUUID(), maid.getGameProfile().getName(),
                     MaidData.mode(maid) == MaidData.Mode.STAY, MaidData.pickup(maid), MaidData.rideable(maid),
                     MaidData.schedule(maid), WorkManager.isAuto(maid), WorkManager.getMode(maid),
+                    WorkManager.taskUid(maid).map(ResourceLocation::toString).orElse(WorkManager.getMode(maid).taskUid().toString()),
+                    WorkManager.taskDisplayName(maid), MaidData.managerType(maid).map(Enum::name).orElse("NONE"),
                     MaidData.showBackpack(maid), MaidData.showBackItem(maid), MaidData.showChatBubble(maid),
                     MaidData.soundFreq(maid), MaidData.pickType(maid), MaidData.openDoor(maid),
                     MaidData.openFenceGate(maid), MaidData.activeClimbing(maid), maid.getHealth(), maid.getMaxHealth(),
@@ -97,7 +100,7 @@ public final class MaidNetwork {
                     || !menu.getMaidId().equals(packet.maidId)) return;
             ServerPlayer maid = owner.getServer().getPlayerList().getPlayer(packet.maidId);
             double range = MaidConfig.GUI_INTERACTION_DISTANCE.get();
-            if (maid == null || !MaidData.ownedBy(maid, owner) || owner.serverLevel() != maid.serverLevel()
+            if (maid == null || !RelationshipService.canManage(owner, maid) || owner.serverLevel() != maid.serverLevel()
                     || owner.distanceToSqr(maid) > range * range || !menu.stillValid(owner)) return;
 
             switch (packet.action) {
@@ -151,6 +154,7 @@ public final class MaidNetwork {
             Snapshot s = packet.snapshot;
             b.writeUUID(s.maidId); b.writeUtf(s.maidName); b.writeBoolean(s.home); b.writeBoolean(s.pickup);
             b.writeBoolean(s.rideable); b.writeEnum(s.schedule); b.writeBoolean(s.autoWork); b.writeEnum(s.workMode);
+            b.writeUtf(s.taskUid); b.writeUtf(s.taskName); b.writeUtf(s.managerType);
             b.writeBoolean(s.showBackpack); b.writeBoolean(s.showBackItem); b.writeBoolean(s.showChatBubble);
             b.writeVarInt(s.soundFreq); b.writeVarInt(s.pickType); b.writeBoolean(s.openDoor);
             b.writeBoolean(s.openFenceGate); b.writeBoolean(s.activeClimbing); b.writeFloat(s.health); b.writeFloat(s.maxHealth);
@@ -160,6 +164,7 @@ public final class MaidNetwork {
         static SnapshotPacket decode(FriendlyByteBuf b) {
             return new SnapshotPacket(new Snapshot(b.readUUID(), b.readUtf(64), b.readBoolean(), b.readBoolean(),
                     b.readBoolean(), b.readEnum(MaidData.Schedule.class), b.readBoolean(), b.readEnum(WorkMode.class),
+                    b.readUtf(128), b.readUtf(128), b.readUtf(32),
                     b.readBoolean(), b.readBoolean(), b.readBoolean(), b.readVarInt(), b.readVarInt(), b.readBoolean(),
                     b.readBoolean(), b.readBoolean(), b.readFloat(), b.readFloat(), b.readVarInt(), b.readVarInt(),
                     b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readEnum(AddonRelationshipData.RelationStage.class),

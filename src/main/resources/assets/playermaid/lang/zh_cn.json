@@ -90,5 +90,16 @@
   "message.playermaid.smart_slab.offline": "玩家女仆 %s 当前不在线。",
   "message.playermaid.smart_slab.relation_invalid": "%s 已不再是你的玩家女仆。",
   "message.playermaid.smart_slab.recalled": "魂符已将 %s 召回到你身边。",
-  "message.playermaid.smart_slab.recalled_target": "%s 使用魂符将你召回了。"
+  "message.playermaid.smart_slab.recalled_target": "%s 使用魂符将你召回了。",
+  "message.playermaid.entity_contract.success": "你已与 Maid %s 建立契约，成为她的玩家女仆。",
+  "message.playermaid.entity_contract.owner": "%s 已成为 Maid %s 的玩家女仆，你拥有继承管理权限。",
+  "message.playermaid.entity_contract.already_bound": "你已经有直接主人了，请先解除当前契约。",
+  "message.playermaid.entity_contract.untamed": "只能与已有主人的车万女仆建立契约。",
+  "message.playermaid.entity_contract.cycle": "该契约会形成从属环路，已阻止绑定。",
+  "message.playermaid.entity_contract.need_cake": "需要手持蛋糕才能建立 Maid 实体契约。",
+  "message.playermaid.entity_contract.maid_died": "你的直接 Maid 主人已经死亡，实体契约已解除。",
+  "message.playermaid.task.synced": "已同步 Maid %s 的工作任务：%s。",
+  "message.playermaid.task.unsupported": "已记录 Maid %s 的任务 %s，但该任务暂无玩家执行器。",
+  "message.playermaid.gui.target_busy": "%s 正由另一名上级管理，请稍后重试。",
+  "message.playermaid.relation.too_deep": "从属关系超过服务器允许的最大深度。"
 }

@@ -90,5 +90,16 @@
   "message.playermaid.smart_slab.offline": "Player maid %s is currently offline.",
   "message.playermaid.smart_slab.relation_invalid": "%s is no longer your player maid.",
   "message.playermaid.smart_slab.recalled": "Soul Talisman recalled %s to your side.",
-  "message.playermaid.smart_slab.recalled_target": "%s recalled you with a Soul Talisman."
+  "message.playermaid.smart_slab.recalled_target": "%s recalled you with a Soul Talisman.",
+  "message.playermaid.entity_contract.success": "You formed a covenant with Maid %s and became her player maid.",
+  "message.playermaid.entity_contract.owner": "%s became Maid %s's player maid. You inherit management access.",
+  "message.playermaid.entity_contract.already_bound": "You already have a direct manager. Leave the current covenant first.",
+  "message.playermaid.entity_contract.untamed": "You can only form a covenant with a tamed Touhou maid.",
+  "message.playermaid.entity_contract.cycle": "That covenant would create a relationship cycle.",
+  "message.playermaid.entity_contract.need_cake": "Hold a cake to form a Maid entity covenant.",
+  "message.playermaid.entity_contract.maid_died": "Your direct Maid manager died, so the entity covenant was released.",
+  "message.playermaid.task.synced": "Synchronized Maid %s's work task: %s.",
+  "message.playermaid.task.unsupported": "Recorded Maid %s's task %s, but no player executor is available for it.",
+  "message.playermaid.gui.target_busy": "%s is currently managed by another superior. Try again later.",
+  "message.playermaid.relation.too_deep": "The relationship exceeds the server's maximum hierarchy depth."
 }

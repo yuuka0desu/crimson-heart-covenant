@@ -13,6 +13,9 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 public final class NativeMaidGuiClient {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void register() {
+        if (!ModEntities.GUI_MAID_PROXY.isPresent()) {
+            throw new IllegalStateException("EntityType playermaid:gui_maid_proxy was not registered; check ModEntities.register(modBus)");
+        }
         EntityRenderers.register(ModEntities.GUI_MAID_PROXY.get(), context ->
                 (net.minecraft.client.renderer.entity.EntityRenderer) new EntityMaidRenderer(context));
         MinecraftForge.EVENT_BUS.register(new NativeMaidGuiClient());

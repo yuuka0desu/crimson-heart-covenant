@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffect;
@@ -27,6 +28,8 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 玩家女仆工作状态、增益与轻量自动行为入口。
@@ -36,6 +39,10 @@ public final class WorkManager {
     public static final String ROOT = "PlayerMaidWork";
     private static final String MODE = "Mode";
     private static final String AUTO = "Auto";
+    private static final String TASK_UID = "TaskUid";
+    private static final String TASK_SOURCE = "TaskSourceMaid";
+    private static final String TASK_NAME = "TaskDisplayName";
+    private static final String TASK_SYNCED_AT = "TaskSyncedAt";
 
     public static void tick(ServerPlayer maid) {
         if (!MaidData.isMaid(maid) || !maid.isAlive()) return;
@@ -91,11 +98,42 @@ public final class WorkManager {
     }
 
     public static void setMode(Player maid, WorkMode mode) {
-        writableRoot(maid).putString(MODE, mode.id());
+        CompoundTag tag = writableRoot(maid);
+        tag.putString(MODE, mode.id());
+        tag.putString(TASK_UID, mode.taskUid().toString());
+        tag.remove(TASK_SOURCE);
+        tag.putString(TASK_NAME, mode.chineseName());
+    }
+
+    public static boolean assignFromMaid(ServerPlayer player, UUID sourceMaid, ResourceLocation taskUid,
+                                         String displayName, long gameTime) {
+        CompoundTag tag = writableRoot(player);
+        tag.putString(TASK_UID, taskUid.toString());
+        tag.putUUID(TASK_SOURCE, sourceMaid);
+        tag.putString(TASK_NAME, displayName == null || displayName.isBlank() ? taskUid.toString() : displayName);
+        tag.putLong(TASK_SYNCED_AT, gameTime);
+        WorkMode mode = WorkMode.byTaskUid(taskUid).orElse(WorkMode.IDLE);
+        tag.putString(MODE, mode.id());
+        tag.putBoolean(AUTO, true);
+        return mode != WorkMode.IDLE || "idle".equals(taskUid.getPath());
     }
 
     public static WorkMode getMode(Player maid) {
         return WorkMode.byId(root(maid).getString(MODE)).orElse(WorkMode.IDLE);
+    }
+
+    public static Optional<ResourceLocation> taskUid(Player maid) {
+        return Optional.ofNullable(ResourceLocation.tryParse(root(maid).getString(TASK_UID)));
+    }
+
+    public static Optional<UUID> taskSource(Player maid) {
+        CompoundTag tag = root(maid);
+        return tag.hasUUID(TASK_SOURCE) ? Optional.of(tag.getUUID(TASK_SOURCE)) : Optional.empty();
+    }
+
+    public static String taskDisplayName(Player maid) {
+        String name = root(maid).getString(TASK_NAME);
+        return name.isBlank() ? getMode(maid).chineseName() : name;
     }
 
     public static void setAuto(Player maid, boolean enabled) {
@@ -116,7 +154,7 @@ public final class WorkManager {
         String ownerText = MaidData.ownerName(maid);
         if (ownerText.isBlank()) ownerText = "未绑定";
         return Component.literal("女仆工作 | 主人：" + ownerText
-                        + " | 任务：" + mode.chineseName()
+                        + " | 任务：" + taskDisplayName(maid)
                         + "（" + mode.category().chineseName() + "）"
                         + " | 自动：" + autoText)
                 .withStyle(ChatFormatting.LIGHT_PURPLE);
@@ -124,7 +162,8 @@ public final class WorkManager {
 
     public static String statusText(ServerPlayer maid) {
         WorkMode mode = getMode(maid);
-        return "任务：" + mode.chineseName() + " | 分类：" + mode.category().chineseName()
+        String uid = taskUid(maid).map(ResourceLocation::toString).orElse(mode.taskUid().toString());
+        return "任务：" + taskDisplayName(maid) + " [" + uid + "] | 分类：" + mode.category().chineseName()
                 + " | 自动：" + (isAuto(maid) ? "开启" : "关闭")
                 + " | 活动范围：" + MaidData.activityRangeText(maid);
     }
@@ -186,19 +225,19 @@ public final class WorkManager {
     }
 
     private static void feedOwner(ServerPlayer maid) {
-        ServerPlayer owner = MaidData.ownerUuid(maid)
-                .map(uuid -> maid.getServer().getPlayerList().getPlayer(uuid)).orElse(null);
+        LivingEntity owner = RelationshipService.resolveDirectManager(maid).orElse(null);
         double range = MaidData.workSearchRange(maid);
-        if (owner == null || owner.serverLevel() != maid.serverLevel() || maid.distanceToSqr(owner) > range * range
-                || (!owner.getFoodData().needsFood() && owner.getHealth() >= owner.getMaxHealth())) {
-            return;
-        }
+        if (owner == null || owner.level() != maid.serverLevel() || maid.distanceToSqr(owner) > range * range) return;
+        if (owner instanceof ServerPlayer playerOwner
+                && !playerOwner.getFoodData().needsFood() && playerOwner.getHealth() >= playerOwner.getMaxHealth()) return;
+        if (!(owner instanceof ServerPlayer) && owner.getHealth() >= owner.getMaxHealth()) return;
 
         Inventory inventory = maid.getInventory();
         for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
             ItemStack stack = inventory.getItem(slot);
             if (!stack.isEmpty() && stack.isEdible()) {
-                owner.getFoodData().eat(stack.getItem(), stack);
+                if (owner instanceof ServerPlayer playerOwner) playerOwner.getFoodData().eat(stack.getItem(), stack);
+                else owner.heal(4.0F);
                 owner.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 60, 0));
                 consumeOne(maid, stack);
                 return;
@@ -229,9 +268,8 @@ public final class WorkManager {
     private static void extinguish(ServerPlayer maid) {
         ServerLevel level = maid.serverLevel();
         maid.setRemainingFireTicks(0);
-        MaidData.ownerUuid(maid)
-                .map(uuid -> maid.getServer().getPlayerList().getPlayer(uuid))
-                .filter(owner -> owner.serverLevel() == level)
+        RelationshipService.resolveDirectManager(maid)
+                .filter(owner -> owner.level() == level)
                 .ifPresent(owner -> owner.setRemainingFireTicks(0));
 
         AABB area = maid.getBoundingBox().inflate(MaidData.workSearchRange(maid));

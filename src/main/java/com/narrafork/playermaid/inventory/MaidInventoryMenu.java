@@ -82,7 +82,7 @@ public final class MaidInventoryMenu extends AbstractContainerMenu {
     public static void open(ServerPlayer owner, ServerPlayer maid, ViewType view) {
         boolean selfBaubles = view == ViewType.MAID_BAUBLES && owner == maid && MaidData.isMaid(maid);
         double distance = MaidConfig.GUI_INTERACTION_DISTANCE.get();
-        if (!MaidConfig.GUI_ENABLED.get() || !online(owner, maid) || (!selfBaubles && !MaidData.ownedBy(maid, owner))
+        if (!MaidConfig.GUI_ENABLED.get() || !online(owner, maid) || (!selfBaubles && !com.narrafork.playermaid.RelationshipService.canManage(owner, maid))
                 || owner.serverLevel() != maid.serverLevel() || (!selfBaubles && owner.distanceToSqr(maid) > distance * distance)) return;
         List<IItemHandler> curios = view == ViewType.CURIOS ? CuriosAccess.stacks(maid) : List.of();
         int curiosCount = curios.stream().mapToInt(IItemHandler::getSlots).sum();
@@ -108,7 +108,7 @@ public final class MaidInventoryMenu extends AbstractContainerMenu {
         if (maid == null || !online(serverOwner, maid) || serverOwner.serverLevel() != maid.serverLevel()) return false;
         if (viewType == ViewType.MAID_BAUBLES && maid == serverOwner) return MaidData.isMaid(maid);
         double distance = MaidConfig.GUI_INTERACTION_DISTANCE.get();
-        return MaidData.ownedBy(maid, serverOwner) && serverOwner.distanceToSqr(maid) <= distance * distance;
+        return com.narrafork.playermaid.RelationshipService.canManage(serverOwner, maid) && serverOwner.distanceToSqr(maid) <= distance * distance;
     }
 
     @Override public ItemStack quickMoveStack(Player player, int index) {
