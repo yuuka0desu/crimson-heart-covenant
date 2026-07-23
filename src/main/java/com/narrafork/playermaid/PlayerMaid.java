@@ -27,7 +27,7 @@ public final class PlayerMaid {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, MaidConfig.SPEC, "player-maid-server.toml");
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> modBus.addListener(this::onClientSetup));
         MinecraftForge.EVENT_BUS.register(new MaidEvents());
-        LOGGER.info("车万女仆：绯心待契 2.0.0 已加载");
+        LOGGER.info("车万女仆：绯心待契 2.1.0 已加载");
     }
 
     private void onEntityAttributes(net.minecraftforge.event.entity.EntityAttributeCreationEvent event) {

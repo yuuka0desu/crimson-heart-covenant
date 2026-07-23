@@ -30,17 +30,21 @@ public final class CuriosAccess {
                 return List.of();
             }
 
-            Object rawMap = inventory.getClass().getMethod("getCurios").invoke(inventory);
+            Class<?> inventoryApi = Class.forName("top.theillusivec4.curios.api.type.capability.ICuriosItemHandler");
+            Object rawMap = inventoryApi.getMethod("getCurios").invoke(inventory);
             if (!(rawMap instanceof Map<?, ?> map)) {
                 return List.of();
             }
 
+            Class<?> stacksApi = Class.forName("top.theillusivec4.curios.api.type.inventory.ICurioStacksHandler");
+            Method getStacks = stacksApi.getMethod("getStacks");
             List<Map.Entry<?, ?>> entries = new ArrayList<>(map.entrySet());
             entries.sort(Comparator.comparing(entry -> String.valueOf(entry.getKey())));
             List<IItemHandler> result = new ArrayList<>();
             for (Map.Entry<?, ?> entry : entries) {
                 Object handler = entry.getValue();
-                Object stacks = handler.getClass().getMethod("getStacks").invoke(handler);
+                if (!stacksApi.isInstance(handler)) continue;
+                Object stacks = getStacks.invoke(handler);
                 if (stacks instanceof IItemHandler itemHandler && itemHandler.getSlots() > 0) {
                     result.add(itemHandler);
                 }

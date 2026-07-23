@@ -174,7 +174,10 @@ public final class NativeMaidGuiBridge {
         MaidData.setOpenFenceGate(target, config.isOpenFenceGate());
         MaidData.setActiveClimbing(target, config.isActiveClimbing());
         if (session.proxy.getTask() != null) {
-            WorkMode.byTaskUid(session.proxy.getTask().getUid()).ifPresent(mode -> WorkManager.setMode(target, mode));
+            WorkMode.byTaskUid(session.proxy.getTask().getUid()).ifPresent(mode -> {
+                WorkManager.setMode(target, mode);
+                WorkManager.setAuto(target, mode != WorkMode.IDLE);
+            });
         }
     }
 

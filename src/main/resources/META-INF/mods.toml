@@ -4,10 +4,13 @@ license="MIT"
 
 [[mods]]
 modId="playermaid"
-version="${file.jarVersion}"
-displayName="车万女仆：绯心待契"
-logoFile="playermaid.png"
-authors="NarraFork"
+version="${mod_version}"
+displayName="PlayerMaid | 车万女仆：绯心待契"
+logoFile="icon.png"
+logoBlur=false
+displayTest="MATCH_VERSION"
+credits="Openai:gpt-5.6-sol、yuuka0desu、普天之下"
+authors="Openai:gpt-5.6-sol,yuuka0desu,普天之下"
 description='''
 允许玩家与其他玩家或车万女仆 Maid 实体建立双向契约，并提供层级从属、任务同步、跟随、召回、保护与继承管理。
 '''
@@ -42,8 +45,8 @@ side="BOTH"
 
 [[dependencies.playermaid]]
 modId="touhou_little_maid"
-mandatory=true
-versionRange="[1.5.2,1.6)"
+mandatory=false
+versionRange="[1.5,)"
 ordering="AFTER"
 side="BOTH"
 

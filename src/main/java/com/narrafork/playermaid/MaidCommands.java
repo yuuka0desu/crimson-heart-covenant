@@ -74,7 +74,7 @@ public final class MaidCommands {
                                 .executes(context -> openInventory(context.getSource(), EntityArgument.getPlayer(context, "player"), ViewType.ENDER_CHEST))))
                 .then(Commands.literal("curios")
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(context -> openInventory(context.getSource(), EntityArgument.getPlayer(context, "player"), ViewType.COMBINED))))
+                                .executes(context -> openInventory(context.getSource(), EntityArgument.getPlayer(context, "player"), ViewType.CURIOS))))
                 .then(Commands.literal("work")
                         .then(Commands.argument("player", EntityArgument.player())
                                 .then(Commands.argument("mode", StringArgumentType.word())
@@ -396,7 +396,8 @@ public final class MaidCommands {
         Component reject = Component.literal("[拒绝]").withStyle(style -> style
                 .withColor(ChatFormatting.RED).withBold(true)
                 .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/maid workreject")));
-        maid.sendSystemMessage(Component.literal(owner.getGameProfile().getName() + " 要求你执行“" + mode.chineseName() + "”。 ")
+        maid.sendSystemMessage(Component.literal(owner.getGameProfile().getName() + " 要求你执行“" + mode.chineseName()
+                        + "”。执行说明：" + mode.executionHint() + " ")
                 .withStyle(ChatFormatting.LIGHT_PURPLE).append(accept).append(Component.literal(" ")).append(reject));
         source.sendSuccess(() -> Component.literal("已向 " + maid.getGameProfile().getName() + " 下达工作请求。"), false);
         return 1;
@@ -415,7 +416,8 @@ public final class MaidCommands {
         WorkManager.setMode(maid, request.mode());
         ServerPlayer owner = source.getServer().getPlayerList().getPlayer(request.ownerUuid());
         maid.sendSystemMessage(Component.literal("已接受工作：" + request.mode().chineseName()
-                + "。自动模式当前" + (WorkManager.isAuto(maid) ? "开启" : "关闭") + "。")
+                + "。自动模式当前" + (WorkManager.isAuto(maid) ? "开启" : "关闭")
+                + "。执行说明：" + request.mode().executionHint())
                 .withStyle(ChatFormatting.GREEN));
         if (owner != null) owner.sendSystemMessage(Component.literal(maid.getGameProfile().getName()
                 + " 已接受工作：“" + request.mode().chineseName() + "”。"));
@@ -438,7 +440,8 @@ public final class MaidCommands {
         ServerPlayer maid = source.getPlayerOrException();
         if (!MaidData.isMaid(maid)) return fail(source, "你当前不是女仆。");
         WorkManager.setAuto(maid, enabled);
-        source.sendSuccess(() -> Component.literal("混合自动工作已" + (enabled ? "开启" : "关闭") + "。"), false);
+        String hint = enabled ? " 当前任务说明：" + WorkManager.getMode(maid).executionHint() : "";
+        source.sendSuccess(() -> Component.literal("混合自动工作已" + (enabled ? "开启" : "关闭") + "。" + hint), false);
         return 1;
     }
 
@@ -447,8 +450,9 @@ public final class MaidCommands {
         ServerPlayer owner = source.getPlayerOrException();
         if (!RelationshipService.canManage(owner, maid)) return fail(source, "该玩家不是你的女仆。");
         WorkManager.setAuto(maid, enabled);
-        maid.sendSystemMessage(Component.literal("主人将你的混合自动工作设为：" + (enabled ? "开启" : "关闭")));
-        source.sendSuccess(() -> Component.literal("已设置 " + maid.getGameProfile().getName() + " 的自动工作。"), false);
+        String hint = enabled ? " 当前任务说明：" + WorkManager.getMode(maid).executionHint() : "";
+        maid.sendSystemMessage(Component.literal("主人将你的混合自动工作设为：" + (enabled ? "开启" : "关闭") + "。" + hint));
+        source.sendSuccess(() -> Component.literal("已设置 " + maid.getGameProfile().getName() + " 的自动工作。" + hint), false);
         return 1;
     }
 

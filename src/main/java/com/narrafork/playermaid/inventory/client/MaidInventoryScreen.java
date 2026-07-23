@@ -132,7 +132,8 @@ public final class MaidInventoryScreen extends AbstractContainerScreen<MaidInven
             case TASK -> {
                 graphics.drawString(font, Component.translatable("screen.playermaid.task.current", snapshot.taskName() + " [" + snapshot.taskUid() + "]"), 58, 49, color, false);
                 graphics.drawString(font, Component.translatable("screen.playermaid.auto.state", onOff(snapshot.autoWork())), 58, 65, color, false);
-                graphics.drawWordWrap(font, Component.translatable("screen.playermaid.task.hint"), 58, 88, 180, color);
+                graphics.drawWordWrap(font, Component.literal("执行说明：" + snapshot.workMode().executionHint()), 58, 78, 180, color);
+                graphics.drawWordWrap(font, Component.translatable("screen.playermaid.task.hint"), 58, 112, 180, color);
             }
             case CONFIG -> {
                 graphics.drawString(font, Component.translatable("screen.playermaid.config.sound", snapshot.soundFreq()), 151, 58, color, false);

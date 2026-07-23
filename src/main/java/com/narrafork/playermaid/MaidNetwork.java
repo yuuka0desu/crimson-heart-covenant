@@ -3,7 +3,9 @@ package com.narrafork.playermaid;
 import com.narrafork.playermaid.inventory.MaidInventoryMenu;
 import com.narrafork.playermaid.inventory.ViewType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -21,7 +23,7 @@ import java.util.function.Supplier;
 
 /** 玩家女仆主界面的服务端权威操作与快照同步。 */
 public final class MaidNetwork {
-    private static final String VERSION = "2";
+    private static final String VERSION = "3";
     private static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(PlayerMaid.MOD_ID, "maid_ui"))
             .networkProtocolVersion(() -> VERSION)
@@ -125,11 +127,17 @@ public final class MaidNetwork {
                 case TOGGLE_AUTO -> WorkManager.setAuto(maid, !WorkManager.isAuto(maid));
                 case NEXT_TASK -> {
                     WorkMode[] modes = WorkMode.values();
-                    WorkManager.setMode(maid, modes[(WorkManager.getMode(maid).ordinal() + 1) % modes.length]);
+                    WorkMode selected = modes[(WorkManager.getMode(maid).ordinal() + 1) % modes.length];
+                    WorkManager.setMode(maid, selected);
+                    sendWorkModeHint(owner, maid, selected);
                 }
                 case SELECT_TASK -> {
                     WorkMode[] modes = WorkMode.values();
-                    if (packet.value >= 0 && packet.value < modes.length) WorkManager.setMode(maid, modes[packet.value]);
+                    if (packet.value >= 0 && packet.value < modes.length) {
+                        WorkMode selected = modes[packet.value];
+                        WorkManager.setMode(maid, selected);
+                        sendWorkModeHint(owner, maid, selected);
+                    }
                 }
                 case TOGGLE_SHOW_BACKPACK -> MaidData.setShowBackpack(maid, !MaidData.showBackpack(maid));
                 case TOGGLE_SHOW_BACK_ITEM -> MaidData.setShowBackItem(maid, !MaidData.showBackItem(maid));
@@ -147,6 +155,13 @@ public final class MaidNetwork {
                 sendSnapshot(owner, maid);
             }
         }
+    }
+
+    private static void sendWorkModeHint(ServerPlayer owner, ServerPlayer maid, WorkMode mode) {
+        Component message = Component.literal(mode.chineseName() + "：" + mode.executionHint())
+                .withStyle(mode.hasAutomaticExecutor() ? ChatFormatting.AQUA : ChatFormatting.YELLOW);
+        owner.sendSystemMessage(message);
+        if (owner != maid) maid.sendSystemMessage(message);
     }
 
     private record SnapshotPacket(Snapshot snapshot) {

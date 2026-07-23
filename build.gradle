@@ -18,6 +18,13 @@ compileJava {
     options.encoding = 'UTF-8'
 }
 
+processResources {
+    inputs.property 'mod_version', mod_version
+    filesMatching('META-INF/mods.toml') {
+        expand mod_version: mod_version
+    }
+}
+
 minecraft {
     mappings channel: 'official', version: minecraft_version
 
@@ -66,11 +73,11 @@ jar {
     manifest {
         attributes([
             'Specification-Title': mod_id,
-            'Specification-Vendor': 'NarraFork',
+            'Specification-Vendor': 'Openai:gpt-5.6-sol,yuuka0desu,普天之下',
             'Specification-Version': '1',
-            'Implementation-Title': project.name,
+            'Implementation-Title': 'PlayerMaid | 车万女仆：绯心待契',
             'Implementation-Version': project.version,
-            'Implementation-Vendor': 'NarraFork',
+            'Implementation-Vendor': 'Openai:gpt-5.6-sol,yuuka0desu,普天之下',
             'MixinConfigs': 'playermaid.mixins.json'
         ])
     }

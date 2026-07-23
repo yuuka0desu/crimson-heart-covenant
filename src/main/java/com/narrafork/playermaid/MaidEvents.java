@@ -40,10 +40,7 @@ public final class MaidEvents {
     public void onPlayerInteract(PlayerInteractEvent.EntityInteract event) {
         if (event.getHand() != InteractionHand.MAIN_HAND || !(event.getEntity() instanceof ServerPlayer owner)) return;
         if (event.getTarget() instanceof EntityMaid entityMaid) {
-            if (TouhouMaidCompat.tryContractWithEntityMaid(owner, entityMaid)) {
-                event.setCanceled(true);
-                event.setCancellationResult(InteractionResult.SUCCESS);
-            }
+            handleEntityMaidContract(event, owner, entityMaid);
             return;
         }
         if (!(event.getTarget() instanceof ServerPlayer target)) return;
@@ -101,6 +98,20 @@ public final class MaidEvents {
                 .withStyle(ChatFormatting.LIGHT_PURPLE).append(accept).append(Component.literal(" ")).append(reject));
         owner.sendSystemMessage(Component.literal("已向 " + target.getGameProfile().getName() + " 发送女仆请求，请等待对方确认。")
                 .withStyle(ChatFormatting.AQUA));
+    }
+
+    @SubscribeEvent
+    public void onPlayerInteractSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (event.getHand() != InteractionHand.MAIN_HAND || !(event.getEntity() instanceof ServerPlayer player)
+                || !(event.getTarget() instanceof EntityMaid maid)) return;
+        handleEntityMaidContract(event, player, maid);
+    }
+
+    private static void handleEntityMaidContract(PlayerInteractEvent event, ServerPlayer player, EntityMaid maid) {
+        if (TouhouMaidCompat.tryContractWithEntityMaid(player, maid)) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+        }
     }
 
     @SubscribeEvent
