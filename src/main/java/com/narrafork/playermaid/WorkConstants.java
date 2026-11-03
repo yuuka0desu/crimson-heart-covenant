@@ -21,6 +21,10 @@ public final class WorkConstants {
     public static final int CROSSBOW_COOLDOWN_TICKS = 25;
     public static final int TRIDENT_COOLDOWN_TICKS = 24;
     public static final int DANMAKU_COOLDOWN_TICKS = 20;
+    /** TACZ 举枪动画的最短等待窗口；窗口内不得重复调用 draw，否则动画会被反复重置。 */
+    public static final int TACZ_DRAW_TICKS = 12;
+    /** 主人距离女仆与目标连线小于该值时跳过射击，避免箭矢擦过主人。 */
+    public static final double FRIENDLY_FIRE_CLEARANCE = 1.5D;
     public static final float DANMAKU_DAMAGE = 4.0F;
     public static final float DANMAKU_VELOCITY = 1.8F;
     public static final double ANIMAL_RANGE = 8.0D;

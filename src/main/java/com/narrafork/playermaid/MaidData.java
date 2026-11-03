@@ -35,10 +35,13 @@ public final class MaidData {
     private static final String OPEN_DOOR = "OpenDoor";
     private static final String OPEN_FENCE_GATE = "OpenFenceGate";
     private static final String ACTIVE_CLIMBING = "ActiveClimbing";
+    private static final String GUN_AUTO_FIRE = "GunAutoFire";
     public static final double UNLIMITED_ACTIVITY_RANGE = -1.0D;
     public static final double MIN_ACTIVITY_RANGE = 1.0D;
     public static final double MAX_ACTIVITY_RANGE = 128.0D;
     public static final double MAX_WORK_SEARCH_RANGE = 32.0D;
+    /** 界面与按键循环使用的活动范围档位，最后一项为无限制。 */
+    public static final double[] ACTIVITY_RANGE_STEPS = {8.0D, 16.0D, 32.0D, 64.0D, 128.0D, UNLIMITED_ACTIVITY_RANGE};
 
     public enum Mode {
         FOLLOW,
@@ -173,6 +176,25 @@ public final class MaidData {
         return activityRange(maid) == UNLIMITED_ACTIVITY_RANGE;
     }
 
+    /** 按档位表切换活动范围，direction 为 +1 或 -1；当前值不在档位表内时归位到第一档。 */
+    public static double stepActivityRange(Player maid, int direction) {
+        double current = activityRange(maid);
+        int step = direction < 0 ? -1 : 1;
+        for (int i = 0; i < ACTIVITY_RANGE_STEPS.length; i++) {
+            if (Math.abs(ACTIVITY_RANGE_STEPS[i] - current) < 1.0E-6D) {
+                int next = Math.floorMod(i + step, ACTIVITY_RANGE_STEPS.length);
+                return applyActivityRange(maid, ACTIVITY_RANGE_STEPS[next]);
+            }
+        }
+        return applyActivityRange(maid, ACTIVITY_RANGE_STEPS[0]);
+    }
+
+    public static double applyActivityRange(Player maid, double value) {
+        if (value == UNLIMITED_ACTIVITY_RANGE) setActivityRangeUnlimited(maid);
+        else setActivityRange(maid, value);
+        return activityRange(maid);
+    }
+
     public static double workSearchRange(Player maid) {
         if (isActivityRangeUnlimited(maid)) return MAX_WORK_SEARCH_RANGE;
         return Math.min(activityRange(maid), MAX_WORK_SEARCH_RANGE);
@@ -206,6 +228,9 @@ public final class MaidData {
     public static void setOpenFenceGate(Player maid, boolean value) { writableRoot(maid).putBoolean(OPEN_FENCE_GATE, value); }
     public static boolean activeClimbing(Player maid) { return bool(maid, ACTIVE_CLIMBING, MaidConfig.MAID_UI_DEFAULT_ACTIVE_CLIMBING.get()); }
     public static void setActiveClimbing(Player maid, boolean value) { writableRoot(maid).putBoolean(ACTIVE_CLIMBING, value); }
+    /** TACZ 自动开火开关；未设置时取配置默认值。 */
+    public static boolean gunAutoFire(Player maid) { return bool(maid, GUN_AUTO_FIRE, MaidConfig.TACZ_AUTO_FIRE_DEFAULT.get()); }
+    public static void setGunAutoFire(Player maid, boolean value) { writableRoot(maid).putBoolean(GUN_AUTO_FIRE, value); }
 
     public static Schedule schedule(Player maid) {
         try { return Schedule.valueOf(root(maid).getString(SCHEDULE)); }

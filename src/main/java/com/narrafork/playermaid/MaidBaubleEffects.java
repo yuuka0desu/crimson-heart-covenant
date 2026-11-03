@@ -18,6 +18,7 @@ import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
+import org.apache.commons.lang3.mutable.MutableFloat;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -34,6 +35,8 @@ public final class MaidBaubleEffects {
             int wireless = inventory.find(TLM, "wireless_io");
             if (wireless >= 0) wirelessTransfer(maid, inventory.getStackInSlot(wireless));
         }
+        // 其它女仆附属注册的饰品钩子在这里代为执行。
+        AddonBaubleCompat.tick(maid);
     }
 
     public static void onHurt(LivingHurtEvent event) {
@@ -49,6 +52,18 @@ public final class MaidBaubleEffects {
             }
         }
 
+        if (applyBuiltinProtection(event, maid, inventory)) return;
+
+        MutableFloat amount = new MutableFloat(event.getAmount());
+        if (AddonBaubleCompat.onInjured(maid, event.getSource(), amount)) {
+            event.setCanceled(true);
+            return;
+        }
+        if (amount.floatValue() != event.getAmount()) event.setAmount(amount.floatValue());
+    }
+
+    /** 车万女仆本体内置保护饰品；返回 true 表示已取消本次伤害。 */
+    private static boolean applyBuiltinProtection(LivingHurtEvent event, ServerPlayer maid, MaidBaubleInventory inventory) {
         String protection = null;
         if (event.getSource().is(DamageTypeTags.IS_EXPLOSION)) protection = "explosion_protect_bauble";
         else if (event.getSource().is(DamageTypeTags.IS_FIRE)) protection = "fire_protect_bauble";
@@ -56,10 +71,10 @@ public final class MaidBaubleEffects {
         else if (event.getSource().is(DamageTypeTags.IS_FALL)) protection = "fall_protect_bauble";
         else if (event.getSource().is(DamageTypeTags.IS_DROWNING)) protection = "drown_protect_bauble";
         else if (event.getSource().is(DamageTypeTags.WITCH_RESISTANT_TO)) protection = "magic_protect_bauble";
-        if (protection == null) return;
+        if (protection == null) return false;
 
         int slot = inventory.find(TLM, protection);
-        if (slot < 0) return;
+        if (slot < 0) return false;
         damageOne(inventory, slot, maid);
         if ("fire_protect_bauble".equals(protection)) {
             maid.clearFire();
@@ -69,6 +84,7 @@ public final class MaidBaubleEffects {
         }
         event.setCanceled(true);
         maid.displayClientMessage(Component.literal("女仆保护饰品抵消了本次伤害").withStyle(ChatFormatting.GOLD), true);
+        return true;
     }
 
     public static void onDeath(LivingDeathEvent event) {
@@ -76,20 +92,22 @@ public final class MaidBaubleEffects {
         MaidBaubleInventory inventory = new MaidBaubleInventory(maid);
         int slot = inventory.find(TLM, "ultramarine_orb_elixir");
         if (slot < 0) slot = inventory.find("minecraft", "totem_of_undying");
-        if (slot < 0) return;
-
-        ItemStack stack = inventory.getStackInSlot(slot);
-        stack.shrink(1);
-        inventory.setStackInSlot(slot, stack);
-        event.setCanceled(true);
-        maid.setHealth(Math.min(6.0F, maid.getMaxHealth()));
-        maid.clearFire();
-        maid.removeAllEffects();
-        maid.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 900, 1));
-        maid.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 100, 1));
-        maid.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 800));
-        maid.level().broadcastEntityEvent(maid, (byte) 35);
-        maid.sendSystemMessage(Component.literal("女仆专属饰品使你免于死亡！").withStyle(ChatFormatting.LIGHT_PURPLE));
+        if (slot >= 0) {
+            ItemStack stack = inventory.getStackInSlot(slot);
+            stack.shrink(1);
+            inventory.setStackInSlot(slot, stack);
+            event.setCanceled(true);
+            maid.setHealth(Math.min(6.0F, maid.getMaxHealth()));
+            maid.clearFire();
+            maid.removeAllEffects();
+            maid.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 900, 1));
+            maid.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 100, 1));
+            maid.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 800));
+            maid.level().broadcastEntityEvent(maid, (byte) 35);
+            maid.sendSystemMessage(Component.literal("女仆专属饰品使你免于死亡！").withStyle(ChatFormatting.LIGHT_PURPLE));
+            return;
+        }
+        if (AddonBaubleCompat.onDeath(maid, event.getSource())) event.setCanceled(true);
     }
 
     private static void magnet(ServerPlayer maid) {

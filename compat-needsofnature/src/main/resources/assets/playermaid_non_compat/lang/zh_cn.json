@@ -1,0 +1,4 @@
+{
+  "command.playermaid_non_compat.status.denied": "你没有权限查看该玩家的自然之需状态。",
+  "command.playermaid_non_compat.status": "%s 的自然之需 | 性别：%s | 动画忙碌：%s | 液体：%s/%s ml | 污渍：%s | 皮肤破损：阶段 %s（%s/%s）| 怀孕：%s"
+}

@@ -1,0 +1,4 @@
+{
+  "command.playermaid_non_compat.status.denied": "You do not have permission to inspect that player's Needs of Nature status.",
+  "command.playermaid_non_compat.status": "%s Needs of Nature | Gender: %s | Animation busy: %s | Liquid: %s/%s ml | Mess: %s | Destroyed skin: stage %s (%s/%s) | Pregnancy: %s"
+}

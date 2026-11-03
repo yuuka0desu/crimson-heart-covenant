@@ -23,6 +23,7 @@ public final class MaidConfig {
     public static final ForgeConfigSpec.BooleanValue MAID_MARRIAGE_COMPAT;
     public static final ForgeConfigSpec.BooleanValue MAID_AFFECTION_COMPAT;
     public static final ForgeConfigSpec.BooleanValue LITTLE_MAD_COMPAT;
+    public static final ForgeConfigSpec.BooleanValue ADDON_BAUBLE_COMPAT;
     public static final ForgeConfigSpec.BooleanValue YSM_COMPAT;
     public static final ForgeConfigSpec.BooleanValue YSM_INTERACTION_ANIMATIONS;
     public static final ForgeConfigSpec.BooleanValue YSM_ANIMATE_OWNER;
@@ -43,6 +44,8 @@ public final class MaidConfig {
     public static final ForgeConfigSpec.IntValue MOOD_DEATH_ANGER;
     public static final ForgeConfigSpec.IntValue MOOD_STRIKE_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue MOOD_STRIKE_CHANCE;
+    public static final ForgeConfigSpec.BooleanValue MOOD_STRIKE_ENABLED;
+    public static final ForgeConfigSpec.BooleanValue TACZ_AUTO_FIRE_DEFAULT;
     public static final ForgeConfigSpec.BooleanValue GUI_ENABLED;
     public static final ForgeConfigSpec.DoubleValue GUI_INTERACTION_DISTANCE;
     public static final ForgeConfigSpec.BooleanValue GUI_STATUS_ONLY_WHEN_INVENTORY_DISABLED;
@@ -113,6 +116,8 @@ public final class MaidConfig {
                 .define("maidAffectionCompat", true);
         LITTLE_MAD_COMPAT = builder.comment("启用 Little Mad Forge 1.20.1 内置情绪层")
                 .define("littleMadCompat", true);
+        ADDON_BAUBLE_COMPAT = builder.comment("让其它女仆附属注册的饰品钩子（onTick/onInjured/onDeath/onPutOn/onTakeOff）对玩家女仆生效")
+                .define("addonBaubleCompat", true);
         builder.push("ysm");
         YSM_COMPAT = builder.comment("启用 Yes Steve Model 2.6.5 玩家女仆模型、预览与动画适配")
                 .define("enabled", true);
@@ -149,8 +154,15 @@ public final class MaidConfig {
                 .defineInRange("strikeThreshold", 90, 0, 180);
         MOOD_STRIKE_CHANCE = builder.comment("每次自动工作判定的罢工概率")
                 .defineInRange("strikeChance", 0.01, 0.0, 1.0);
+        MOOD_STRIKE_ENABLED = builder.comment("允许情绪过差时罢工；关闭后怒气仍会累积和显示，但不再中断自动工作")
+                .define("strikeEnabled", true);
         builder.pop();
 
+        builder.pop();
+
+        builder.push("combat");
+        TACZ_AUTO_FIRE_DEFAULT = builder.comment("玩家女仆使用 TACZ 枪械时默认自动开火；女仆可用按键随时切换")
+                .define("taczAutoFireDefault", true);
         builder.pop();
 
         builder.push("gui");

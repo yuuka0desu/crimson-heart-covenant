@@ -26,6 +26,11 @@ public final class MaidMarriageCompat {
             Items.AMETHYST_SHARD, Items.QUARTZ, Items.LAPIS_LAZULI, Items.NETHERITE_SCRAP);
     private static final Set<Item> OFFENSIVE = Set.of(Items.ROTTEN_FLESH, Items.SPIDER_EYE, Items.FERMENTED_SPIDER_EYE,
             Items.POISONOUS_POTATO, Items.PUFFERFISH, Items.BONE);
+    /** 心契同眠自己的工具物品；这些物品有独立右键语义，本模组不得抢占交互。 */
+    private static final Set<String> COMPAT_TOOL_PATHS = Set.of(
+            "heart_pact_guide", "yes_pillow", "sunflower_hairpin", "marriage_consent_form",
+            "growth_tool", "birth_tool", "pregnancy_test_tool", "pregnancy_settlement_tool",
+            "family_tree_tool", "longing_tester", "flower_test_kit", "breeding_tester", "sauce_duck");
 
     public enum GiftCategory { FLOWER, RAINBOW, SWEET, MEAL, VALUABLE, OFFENSIVE, OTHER }
 
@@ -33,12 +38,19 @@ public final class MaidMarriageCompat {
     public static boolean isProposalRing(ItemStack stack) {
         return !stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(PROPOSAL_RING);
     }
+    /**
+     * 是否为其它兼容模组自有交互物品。命中时不取消右键事件、不打开原生面板，
+     * 让对应模组的物品逻辑正常执行（例如眷恋测试工具、成长工具、花卉测试工具）。
+     */
+    public static boolean isCompatTool(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return id.getNamespace().equals("maidmarriage") && COMPAT_TOOL_PATHS.contains(id.getPath());
+    }
     public static boolean isGift(ItemStack stack) {
         if (stack.isEmpty() || isProposalRing(stack)) return false;
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        if (id.getNamespace().equals("maidmarriage") && Set.of("heart_pact_guide", "yes_pillow", "sunflower_hairpin",
-                "marriage_consent_form", "growth_tool", "birth_tool", "pregnancy_test_tool", "pregnancy_settlement_tool",
-                "family_tree_tool", "longing_tester", "flower_test_kit").contains(id.getPath())) return false;
+        if (id.getNamespace().equals("maidmarriage") && COMPAT_TOOL_PATHS.contains(id.getPath())) return false;
         return category(stack) != GiftCategory.OTHER || stack.isEdible();
     }
 

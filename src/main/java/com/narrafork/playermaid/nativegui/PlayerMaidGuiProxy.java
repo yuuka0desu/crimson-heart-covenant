@@ -29,6 +29,9 @@ public final class PlayerMaidGuiProxy extends EntityMaid {
         setInvulnerable(true);
         setSilent(true);
         setNoGravity(true);
+        // 代理实体只作为原生菜单的数据载体存在，不能在世界里被渲染，
+        // 否则主人打开界面时会同时看到玩家本体和这名代理女仆。
+        setInvisible(true);
         noPhysics = true;
     }
 

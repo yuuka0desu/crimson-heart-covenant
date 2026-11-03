@@ -28,9 +28,11 @@ import java.util.function.Predicate;
 /** 使用真实投射物执行弓、弩、三叉戟和 TLM 弹幕攻击。 */
 public final class RangedCombatExecutor {
     private static final String AUTO_CROSSBOW_CHARGE_UNTIL = "PlayerMaidAutoCrossbowChargeUntil";
+    /** 投射物上记录的主人 UUID，用于脱离实时关系的友伤判定。 */
+    public static final String OWNER_TAG = "PlayerMaidOwner";
 
     public enum Result {
-        FIRED, NO_TARGET, NO_WEAPON, NO_AMMO, COOLING_DOWN
+        FIRED, NO_TARGET, NO_WEAPON, NO_AMMO, COOLING_DOWN, FRIENDLY_BLOCKED
     }
 
     public static Result tick(ServerPlayer maid, WorkMode mode) {
@@ -45,6 +47,7 @@ public final class RangedCombatExecutor {
         };
         Monster target = findTarget(maid, range);
         if (target == null) return Result.NO_TARGET;
+        if (isOwnerInLineOfFire(maid, target)) return Result.FRIENDLY_BLOCKED;
         Result result = switch (mode) {
             case RANGED_ATTACK -> shootBow(maid, target);
             case CROSSBOW_ATTACK -> shootCrossbow(maid, target);
@@ -54,6 +57,35 @@ public final class RangedCombatExecutor {
         };
         if (result == Result.FIRED) maid.resetAttackStrengthTicker();
         return result;
+    }
+
+    /**
+     * 主人是否位于女仆与目标的弹道附近。命中时跳过本次射击，
+     * 避免箭矢擦过主人后反弹回女仆自身。
+     */
+    public static boolean isOwnerInLineOfFire(ServerPlayer maid, LivingEntity target) {
+        LivingEntity owner = RelationshipService.resolveDirectManager(maid).orElse(null);
+        if (owner == null || owner == maid || owner == target || owner.level() != maid.level()) return false;
+        Vec3 start = maid.getEyePosition();
+        Vec3 end = target.getEyePosition();
+        Vec3 ownerCenter = new Vec3(owner.getX(), owner.getY() + owner.getBbHeight() * 0.5D, owner.getZ());
+        ProjectileAim.ClosestPoint closest = ProjectileAim.closestOnSegment(
+                start.x, start.y, start.z, end.x, end.y, end.z,
+                ownerCenter.x, ownerCenter.y, ownerCenter.z);
+        if (!closest.insideSegment()) return false;
+        double clearance = WorkConstants.FRIENDLY_FIRE_CLEARANCE + owner.getBbWidth() * 0.5D;
+        return closest.distance() <= clearance;
+    }
+
+    /** 把主人 UUID 写入投射物，使友伤保护不再依赖飞行途中的实时关系查询。 */
+    public static void tagOwner(net.minecraft.world.entity.Entity projectile, ServerPlayer maid) {
+        projectile.getPersistentData().putUUID(OWNER_TAG, maid.getUUID());
+    }
+
+    /** 读取投射物上记录的主人 UUID。 */
+    public static java.util.Optional<java.util.UUID> taggedOwner(net.minecraft.world.entity.Entity projectile) {
+        var tag = projectile.getPersistentData();
+        return tag.hasUUID(OWNER_TAG) ? java.util.Optional.of(tag.getUUID(OWNER_TAG)) : java.util.Optional.empty();
     }
 
     public static Monster findTarget(ServerPlayer maid, double range) {
@@ -83,6 +115,7 @@ public final class RangedCombatExecutor {
         if (EnchantmentHelper.getItemEnchantmentLevel(Enchantments.FLAMING_ARROWS, bow) > 0) arrow.setSecondsOnFire(100);
         aim(arrow, maid, target, 3.0F, 1.0F);
         arrow.pickup = infinite ? AbstractArrow.Pickup.CREATIVE_ONLY : AbstractArrow.Pickup.ALLOWED;
+        tagOwner(arrow, maid);
         maid.serverLevel().addFreshEntity(arrow);
         maid.serverLevel().playSound(null, maid.blockPosition(), SoundEvents.ARROW_SHOOT, SoundSource.PLAYERS, 1.0F, 1.0F);
         maid.swing(InteractionHand.MAIN_HAND, true);
@@ -116,6 +149,7 @@ public final class RangedCombatExecutor {
         arrow.setEnchantmentEffectsFromEntity(maid, 1.0F);
         aim(arrow, maid, target, 3.15F, 0.75F);
         arrow.pickup = maid.getAbilities().instabuild ? AbstractArrow.Pickup.CREATIVE_ONLY : AbstractArrow.Pickup.ALLOWED;
+        tagOwner(arrow, maid);
         maid.serverLevel().addFreshEntity(arrow);
         maid.serverLevel().playSound(null, maid.blockPosition(), SoundEvents.CROSSBOW_SHOOT,
                 SoundSource.PLAYERS, 1.0F, 1.0F);
@@ -139,6 +173,7 @@ public final class RangedCombatExecutor {
         ThrownTrident projectile = new ThrownTrident(maid.level(), maid, projectileStack);
         projectile.pickup = AbstractArrow.Pickup.DISALLOWED;
         aim(projectile, maid, target, 2.5F, 1.0F);
+        tagOwner(projectile, maid);
         maid.serverLevel().addFreshEntity(projectile);
         maid.serverLevel().playSound(null, maid.blockPosition(), SoundEvents.TRIDENT_THROW,
                 SoundSource.PLAYERS, 1.0F, 1.0F);

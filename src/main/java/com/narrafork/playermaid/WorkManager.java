@@ -255,6 +255,8 @@ public final class WorkManager {
                     showWorkNotice(maid, "枪械攻击等待中：请把有效 TACZ 枪械放在主手");
                 } else if (result == TaczGunCompat.Result.NO_AMMO) {
                     showWorkNotice(maid, "枪械攻击等待中：弹匣和背包弹药不足，已尝试换弹");
+                } else if (result == TaczGunCompat.Result.MANUAL) {
+                    showWorkNotice(maid, "枪械自动开火已关闭，可按按键重新开启");
                 } else if (result == TaczGunCompat.Result.MISSING_MOD) {
                     showWorkNotice(maid, "枪械攻击缺少 TACZ 模组");
                 } else if (result == TaczGunCompat.Result.FAILED) {

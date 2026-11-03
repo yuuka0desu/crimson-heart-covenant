@@ -81,7 +81,7 @@ public final class LittleMadCompat {
     }
 
     public static boolean isStriking(ServerPlayer maid) {
-        if (!MaidConfig.LITTLE_MAD_COMPAT.get()) return false;
+        if (!MaidConfig.LITTLE_MAD_COMPAT.get() || !MaidConfig.MOOD_STRIKE_ENABLED.get()) return false;
         int mood = AddonRelationshipData.mood(maid);
         if (mood >= 180) return true;
         return mood >= MaidConfig.MOOD_STRIKE_THRESHOLD.get()

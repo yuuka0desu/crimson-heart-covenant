@@ -6,3 +6,4 @@ pluginManagement {
 }
 
 rootProject.name = 'player-maid'
+include 'compat-needsofnature'

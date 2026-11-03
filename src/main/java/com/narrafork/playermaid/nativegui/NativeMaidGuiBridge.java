@@ -19,6 +19,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.IItemHandlerModifiable;
@@ -38,6 +39,7 @@ public final class NativeMaidGuiBridge {
     private static final EquipmentSlot[] ARMOR = {
             EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
+    private static final int OFFHAND_SLOT = 40;
 
     public static boolean open(ServerPlayer owner, ServerPlayer target) {
         if (!MaidConfig.GUI_ENABLED.get() || !com.narrafork.playermaid.RelationshipService.canManage(owner, target)
@@ -61,11 +63,12 @@ public final class NativeMaidGuiBridge {
         proxy.moveTo(target.getX(), target.getY(), target.getZ(), target.getYRot(), target.getXRot());
         proxy.setMaidBackpackType(new BigBackpack());
         copyStateToProxy(target, proxy);
-        copyInventoryToProxy(target, proxy);
+        int heldSlot = target.getInventory().selected;
+        copyInventoryToProxy(target, proxy, heldSlot);
         copyBaublesToProxy(target, proxy);
         copyCurios(target, proxy);
         owner.serverLevel().addFreshEntity(proxy);
-        SESSIONS.put(owner.getUUID(), new Session(owner.getUUID(), target.getUUID(), proxy, 2));
+        SESSIONS.put(owner.getUUID(), new Session(owner.getUUID(), target.getUUID(), proxy, 2, heldSlot));
         return true;
     }
 
@@ -90,9 +93,13 @@ public final class NativeMaidGuiBridge {
             if (owner.containerMenu instanceof AbstractMaidContainer menu && menu.getMaid() == session.proxy) {
                 session.absentTicks = 0;
                 syncStateToTarget(session, target);
-                syncInventoryToTarget(target, session.proxy);
-                syncBaublesToTarget(target, session.proxy);
-                syncCurios(session.proxy, target);
+                // 仅在代理侧真的发生变化时回写，且主手写回打开界面时记录的槽位，
+                // 避免滚轮切换选中槽后把代理手中的物品写进别的槽位造成复制覆盖。
+                if (inventoryDiffers(target, session.proxy, session.heldSlot)) {
+                    syncInventoryToTarget(target, session.proxy, session.heldSlot);
+                    syncBaublesToTarget(target, session.proxy);
+                    syncCurios(session.proxy, target);
+                }
                 syncYsmToTarget(session, target);
             } else if (++session.absentTicks > 10) {
                 remove.add(session.ownerId);
@@ -108,7 +115,7 @@ public final class NativeMaidGuiBridge {
         ServerPlayer target = server == null ? null : server.getPlayerList().getPlayer(session.targetId);
         if (target != null) {
             syncStateToTarget(session, target);
-            syncInventoryToTarget(target, session.proxy);
+            syncInventoryToTarget(target, session.proxy, session.heldSlot);
             syncBaublesToTarget(target, session.proxy);
             syncCurios(session.proxy, target);
             syncYsmToTarget(session, target);
@@ -186,19 +193,53 @@ public final class NativeMaidGuiBridge {
                 .filter(entry -> entry.getKey().equals(mode.taskUid())).map(Map.Entry::getValue).findFirst();
     }
 
-    private static void copyInventoryToProxy(ServerPlayer target, PlayerMaidGuiProxy proxy) {
+    private static void copyInventoryToProxy(ServerPlayer target, PlayerMaidGuiProxy proxy, int heldSlot) {
         for (int i = 0; i < 27; i++) proxy.getMaidInv().setStackInSlot(i, target.getInventory().getItem(i + 9).copy());
-        proxy.setItemSlot(EquipmentSlot.MAINHAND, target.getMainHandItem().copy());
-        proxy.setItemSlot(EquipmentSlot.OFFHAND, target.getOffhandItem().copy());
-        for (EquipmentSlot slot : ARMOR) proxy.setItemSlot(slot, target.getItemBySlot(slot).copy());
+        proxy.setItemSlot(EquipmentSlot.MAINHAND, target.getInventory().getItem(heldSlot).copy());
+        proxy.setItemSlot(EquipmentSlot.OFFHAND, target.getInventory().getItem(OFFHAND_SLOT).copy());
+        for (EquipmentSlot slot : ARMOR) proxy.setItemSlot(slot, target.getInventory().getItem(playerSlot(slot)).copy());
     }
 
-    private static void syncInventoryToTarget(ServerPlayer target, PlayerMaidGuiProxy proxy) {
-        for (int i = 0; i < 27; i++) target.getInventory().setItem(i + 9, proxy.getMaidInv().getStackInSlot(i).copy());
-        target.setItemSlot(EquipmentSlot.MAINHAND, proxy.getMainHandItem().copy());
-        target.setItemSlot(EquipmentSlot.OFFHAND, proxy.getOffhandItem().copy());
-        for (EquipmentSlot slot : ARMOR) target.setItemSlot(slot, proxy.getItemBySlot(slot).copy());
-        target.getInventory().setChanged();
+    /**
+     * 按槽位精确回写玩家背包。主手固定写回打开界面时记录的槽位，
+     * 不再使用 setItemSlot(MAINHAND, …)，避免写入「当前选中槽」导致错位覆盖。
+     */
+    private static void syncInventoryToTarget(ServerPlayer target, PlayerMaidGuiProxy proxy, int heldSlot) {
+        Inventory inventory = target.getInventory();
+        for (int i = 0; i < 27; i++) inventory.setItem(i + 9, proxy.getMaidInv().getStackInSlot(i).copy());
+        inventory.setItem(heldSlot, proxy.getMainHandItem().copy());
+        inventory.setItem(OFFHAND_SLOT, proxy.getOffhandItem().copy());
+        for (EquipmentSlot slot : ARMOR) inventory.setItem(playerSlot(slot), proxy.getItemBySlot(slot).copy());
+        inventory.setChanged();
+    }
+
+    /** 代理与真实背包是否已经不一致；一致时跳过回写。 */
+    private static boolean inventoryDiffers(ServerPlayer target, PlayerMaidGuiProxy proxy, int heldSlot) {
+        Inventory inventory = target.getInventory();
+        for (int i = 0; i < 27; i++) {
+            if (!sameStack(inventory.getItem(i + 9), proxy.getMaidInv().getStackInSlot(i))) return true;
+        }
+        if (!sameStack(inventory.getItem(heldSlot), proxy.getMainHandItem())) return true;
+        if (!sameStack(inventory.getItem(OFFHAND_SLOT), proxy.getOffhandItem())) return true;
+        for (EquipmentSlot slot : ARMOR) {
+            if (!sameStack(inventory.getItem(playerSlot(slot)), proxy.getItemBySlot(slot))) return true;
+        }
+        return false;
+    }
+
+    private static int playerSlot(EquipmentSlot slot) {
+        return switch (slot) {
+            case HEAD -> 39;
+            case CHEST -> 38;
+            case LEGS -> 37;
+            case FEET -> 36;
+            default -> throw new IllegalArgumentException("非护甲槽位: " + slot);
+        };
+    }
+
+    private static boolean sameStack(ItemStack left, ItemStack right) {
+        if (left.isEmpty() || right.isEmpty()) return left.isEmpty() && right.isEmpty();
+        return left.getCount() == right.getCount() && ItemStack.isSameItemSameTags(left, right);
     }
 
     private static void copyBaublesToProxy(ServerPlayer target, PlayerMaidGuiProxy proxy) {
@@ -246,16 +287,19 @@ public final class NativeMaidGuiBridge {
         final UUID ownerId;
         final UUID targetId;
         final PlayerMaidGuiProxy proxy;
+        /** 打开界面时玩家女仆选中的快捷栏槽位；主手回写固定使用该槽位。 */
+        final int heldSlot;
         int openDelay;
         int absentTicks;
         boolean lastHome;
         String lastYsm;
 
-        Session(UUID ownerId, UUID targetId, PlayerMaidGuiProxy proxy, int openDelay) {
+        Session(UUID ownerId, UUID targetId, PlayerMaidGuiProxy proxy, int openDelay, int heldSlot) {
             this.ownerId = ownerId;
             this.targetId = targetId;
             this.proxy = proxy;
             this.openDelay = openDelay;
+            this.heldSlot = heldSlot;
             this.lastHome = proxy.isHomeModeEnable();
             this.lastYsm = proxy.isYsmModel() ? proxy.getYsmModelId() + "\u0000" + proxy.getYsmModelTexture() : "";
         }

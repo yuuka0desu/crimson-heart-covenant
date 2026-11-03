@@ -25,9 +25,14 @@ public final class PlayerMaid {
         modBus.addListener(this::onEntityAttributes);
         MaidNetwork.register();
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, MaidConfig.SPEC, "player-maid-server.toml");
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> modBus.addListener(this::onClientSetup));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+            modBus.addListener(this::onClientSetup);
+            // 按键与客户端 tick 监听器只在客户端挂载，专用服务端不会加载 MaidKeys。
+            modBus.addListener(com.narrafork.playermaid.inventory.client.MaidKeys::registerKeyMappings);
+            MinecraftForge.EVENT_BUS.addListener(com.narrafork.playermaid.inventory.client.MaidKeys::onClientTick);
+        });
         MinecraftForge.EVENT_BUS.register(new MaidEvents());
-        LOGGER.info("车万女仆：绯心待契 2.1.0 已加载");
+        LOGGER.info("车万女仆：绯心待契 2.1.1 已加载");
     }
 
     private void onEntityAttributes(net.minecraftforge.event.entity.EntityAttributeCreationEvent event) {

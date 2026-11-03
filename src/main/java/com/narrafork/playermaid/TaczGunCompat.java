@@ -1,7 +1,9 @@
 package com.narrafork.playermaid;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.fml.ModList;
 
@@ -11,31 +13,47 @@ import java.util.function.Supplier;
 /** TACZ 可选兼容层；射速、弹药、枪栓、换弹、过热和伤害全部交还 TACZ 处理。 */
 public final class TaczGunCompat {
     public enum Result {
-        FIRED, NO_TARGET, NO_GUN, NO_AMMO, WAITING, MISSING_MOD, FAILED
+        FIRED, NO_TARGET, NO_GUN, NO_AMMO, WAITING, MANUAL, MISSING_MOD, FAILED
     }
+
+    private static final String ROOT = "PlayerMaidGunState";
+    private static final String DRAW_UNTIL = "DrawUntil";
 
     public static Result tick(ServerPlayer maid) {
         if (!ModList.get().isLoaded("tacz")) return Result.MISSING_MOD;
-        LivingEntity target = RangedCombatExecutor.findTarget(maid, WorkConstants.GUN_RANGE);
-        if (target == null) return Result.NO_TARGET;
+        boolean autoFire = MaidData.gunAutoFire(maid);
+        LivingEntity target = autoFire && !maid.isUsingItem()
+                ? RangedCombatExecutor.findTarget(maid, WorkConstants.GUN_RANGE) : null;
+        long now = maid.level().getGameTime();
+        long drawUntil = state(maid).getLong(DRAW_UNTIL);
+
+        TaczFireGate.Step step = TaczFireGate.next(now, drawUntil, autoFire, maid.isUsingItem(), target != null);
+        if (step == TaczFireGate.Step.HOLD) {
+            if (!autoFire) return Result.MANUAL;
+            return target != null ? Result.WAITING : Result.NO_TARGET;
+        }
+
         ItemStack gunStack = maid.getMainHandItem();
         try {
             Class<?> gunApi = Class.forName("com.tacz.guns.api.item.IGun");
             Method getGun = gunApi.getMethod("getIGunOrNull", ItemStack.class);
             if (getGun.invoke(null, gunStack) == null) return Result.NO_GUN;
 
-            RangedCombatExecutor.lookAt(maid, target);
             Class<?> operatorApi = Class.forName("com.tacz.guns.api.entity.IGunOperator");
             Object operator = operatorApi.getMethod("fromLivingEntity", LivingEntity.class).invoke(null, maid);
             if (operator == null) return Result.FAILED;
 
-            Supplier<ItemStack> currentGun = maid::getMainHandItem;
-            operatorApi.getMethod("draw", Supplier.class).invoke(operator, currentGun);
-            @SuppressWarnings("unchecked")
-            Supplier<Float> yaw = () -> maid.getYRot();
-            @SuppressWarnings("unchecked")
+            if (step == TaczFireGate.Step.DRAW) {
+                Supplier<ItemStack> currentGun = maid::getMainHandItem;
+                operatorApi.getMethod("draw", Supplier.class).invoke(operator, currentGun);
+                state(maid).putLong(DRAW_UNTIL, TaczFireGate.drawWindowEnd(now, WorkConstants.TACZ_DRAW_TICKS));
+                return Result.WAITING;
+            }
+
+            RangedCombatExecutor.lookAt(maid, target);
             Supplier<Float> pitch = () -> maid.getXRot();
-            Object raw = operatorApi.getMethod("shoot", Supplier.class, Supplier.class).invoke(operator, yaw, pitch);
+            Supplier<Float> yaw = () -> maid.getYRot();
+            Object raw = operatorApi.getMethod("shoot", Supplier.class, Supplier.class).invoke(operator, pitch, yaw);
             String result = raw instanceof Enum<?> value ? value.name() : String.valueOf(raw);
             return switch (result) {
                 case "SUCCESS" -> Result.FIRED;
@@ -47,8 +65,13 @@ public final class TaczGunCompat {
                     operatorApi.getMethod("bolt").invoke(operator);
                     yield Result.WAITING;
                 }
-                case "NOT_DRAW", "COOL_DOWN", "IS_RELOADING", "IS_DRAWING", "IS_BOLTING",
-                        "IS_SPRINTING", "OVERHEATED", "NETWORK_FAIL" -> Result.WAITING;
+                case "NOT_DRAW" -> {
+                    // 枪被收回：重置窗口，下一 tick 重新举枪。
+                    state(maid).putLong(DRAW_UNTIL, TaczFireGate.resetAfterNotDrawn());
+                    yield Result.WAITING;
+                }
+                case "COOL_DOWN", "IS_RELOADING", "IS_DRAWING", "IS_BOLTING", "IS_SPRINTING",
+                        "OVERHEATED", "NETWORK_FAIL" -> Result.WAITING;
                 case "NOT_GUN", "ID_NOT_EXIST" -> Result.NO_GUN;
                 default -> Result.FAILED;
             };
@@ -56,6 +79,23 @@ public final class TaczGunCompat {
             PlayerMaid.LOGGER.warn("TACZ 自动射击桥接失败", exception);
             return Result.FAILED;
         }
+    }
+
+    /** 关闭或开启该女仆的自动开火，返回切换后的状态。 */
+    public static boolean toggleAutoFire(ServerPlayer maid) {
+        boolean next = !MaidData.gunAutoFire(maid);
+        MaidData.setGunAutoFire(maid, next);
+        if (!next) state(maid).putLong(DRAW_UNTIL, TaczFireGate.resetAfterNotDrawn());
+        return next;
+    }
+
+    private static CompoundTag state(Player maid) {
+        CompoundTag persistent = maid.getPersistentData();
+        CompoundTag persisted = persistent.getCompound(Player.PERSISTED_NBT_TAG);
+        if (!persistent.contains(Player.PERSISTED_NBT_TAG)) persistent.put(Player.PERSISTED_NBT_TAG, persisted);
+        CompoundTag root = persisted.getCompound(ROOT);
+        if (!persisted.contains(ROOT)) persisted.put(ROOT, root);
+        return root;
     }
 
     private TaczGunCompat() {

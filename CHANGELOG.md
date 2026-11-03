@@ -1,5 +1,129 @@
 # Changelog
 
+## 2.1.1
+
+### 修复内容（中文）
+
+- 修复 TACZ 枪械无法自动射击。此前每 tick 都会重新调用举枪动作，导致 `shoot` 始终返回 `IS_DRAWING`，女仆一直停在等待状态，同时 TACZ 也会拒绝玩家的手动射击。现在每轮部署只举枪一次，射击的俯仰角与偏航角参数也改为与 TACZ 签名一致的顺序。
+- 新增每名女仆独立的 TACZ 自动开火开关。玩家女仆可用「切换 TACZ 枪械自动开火」按键（默认 `V`）在自动与手动之间切换，原生面板的配置页也提供同一开关。
+- 修复兼容模组物品被原生女仆面板抢占。手持心契同眠的工具（眷恋测试工具、女仆成长工具、花卉测试工具等）右键时不再只弹出女仆界面，而是交回对应模组处理，好感度可以正常增加。
+- 修复原生面板开启期间的物品复制与槽位覆盖。背包回写不再每 tick 执行，手持物品改为写回读取时的那个槽位，而不再写入当前选中的快捷栏槽位，滚轮切换物品不会再复制或覆盖其它物品。
+- 修复友伤被拦截时女仆仍然累积怒气的问题。怒气现在只在实际造成伤害时累积。
+- 新增 `strikeEnabled` 选项（默认 `true`）。设为 `false` 后情绪值仍会正常显示，但罢工不会再中断自动工作。
+- 修复玩家女仆射出的投射物在关系无法解析后仍然伤害主人，包括箭矢从主人身上反弹后击中女仆本人的情况。投射物现在会在发射时记录主人，友伤保护不再依赖飞行途中的实时关系。
+- 自动远程攻击在主人位于弹道范围内时会跳过本次射击，避免箭矢擦过主人。
+- 修复原生面板的代理实体被渲染到世界中，导致主人打开界面时同时看到两名女仆。
+- 修复玩家女仆无法驾驶车万女仆扫帚飞行的问题。扫帚要求第二名乘客必须是 `EntityMaid`，而玩家女仆永远不满足该条件。
+- 在原生面板中开放活动范围设置，可调小、调大或设为无限制；女仆本人也可用「循环切换活动范围」按键调整。
+- 更新女仆界面网络协议版本，并补齐中英文按键与按钮文案。
+
+### 新增（中文）
+
+- 新增其它女仆附属模组的饰品兼容层。附属通过车万女仆 `BaubleManager` 注册的饰品，其 `onTick`、`onInjured`、`onDeath`、`onPutOn`、`onTakeOff` 钩子现在会对玩家女仆执行。实现方式是镜像一个脱管的 `EntityMaid` 代理并回写药水效果与燃烧状态，车万女仆本体的饰品仍由原有原生实现处理，不会重复生效。
+- 新增 `addonBaubleCompat` 选项（默认 `true`）用于关闭该兼容层。
+- 已验证与心契同眠（Heart Pact）、Maid Beacon、SolMaid 的饰品注册共存；兼容层对未安装的附属无副作用。
+
+### Bug Fixes (English)
+
+- Fixed TACZ firearms never firing automatically. The gun draw animation was restarted every tick, so `shoot` permanently reported `IS_DRAWING` and the maid stayed in a waiting state while the weapon also refused manual fire. The draw animation is now performed once per deployment and the shot pitch/yaw arguments follow the TACZ signature order.
+- Added a per-maid TACZ auto-fire toggle. Player maids can switch between automatic and manual fire with the `Toggle TACZ Auto Fire` key (default `V`); the native GUI config tab exposes the same switch.
+- Fixed compatibility addon items being hijacked by the native maid panel. Right-clicking with a Heart Pact tool (longing tester, growth tool, flower test kit, and similar) now reaches that mod instead of only opening the maid GUI, so favorability gains apply again.
+- Fixed item duplication and slot overwriting while the native maid panel was open. Inventory write-back no longer runs every tick, and the held item is written back to the slot it was read from instead of the currently selected hotbar slot, so scrolling no longer copies or overwrites items.
+- Fixed the maid gaining anger while friendly fire was blocked. Anger now only accumulates when damage is actually applied.
+- Added a `strikeEnabled` option (default `true`). Setting it to `false` keeps the mood value visible but stops strikes from interrupting automatic work.
+- Fixed player-maid projectiles harming their owner after the relationship was no longer resolvable, including arrows that bounced off the owner and hit the maid. Projectiles record their owner when fired, so the protection no longer depends on live relationship state.
+- Automatic ranged attacks now skip firing when the owner stands within the projectile path.
+- Fixed the native maid panel proxy entity being rendered in the world, which made the owner see two maids at once.
+- Fixed player maids being unable to fly the Touhou Little Maid broom. The broom required an `EntityMaid` companion passenger, which a player maid never satisfies.
+- Exposed the maid activity range in the native panel. Range can be stepped down, stepped up, or set to unlimited, and a `Cycle Activity Range` key is available for the maid's own client.
+- Updated the maid GUI network protocol version and added Chinese/English key and button labels.
+
+### Added (English)
+
+- Added a compatibility layer for accessories registered by other Touhou Little Maid addons. For addon baubles registered through TLM's `BaubleManager`, the `onTick`, `onInjured`, `onDeath`, `onPutOn`, and `onTakeOff` hooks now run for player maids. The implementation mirrors a detached `EntityMaid` proxy and copies potion effects and burning state back to the real player. Touhou Little Maid's own baubles are still handled by the existing native implementation and never run twice.
+- Added an `addonBaubleCompat` option (default `true`) to disable the layer.
+- Verified coexistence with the accessory registrations of Heart Pact, Maid Beacon, and SolMaid; the layer has no effect when an addon is absent.
+
+### 兼容与升级说明（中文）
+
+- 新增服务端配置：`addonCompat.littleMadMood.strikeEnabled`（默认 `true`）与 `combat.taczAutoFireDefault`（默认 `true`）。
+- 女仆界面网络协议版本由 3 升至 4，服务端与客户端需同时更新。
+- 车万女仆扫帚兼容位于 `playermaid.touhou.mixins.json`（`required=false`），未安装车万女仆时会被自动跳过。
+- 旧存档首次加载会提示 `playermaid (version 2.1.0 -> 2.1.1)`，属正常的版本升级通知。
+
+### Compatibility and Upgrade Notes (English)
+
+- New server options: `addonCompat.littleMadMood.strikeEnabled` (default `true`) and `combat.taczAutoFireDefault` (default `true`).
+- The maid GUI network protocol moved from version 3 to 4; update server and client together.
+- The Touhou Little Maid broom integration lives in `playermaid.touhou.mixins.json` (`required=false`) and is skipped automatically when Touhou Little Maid is absent.
+- Existing worlds show `playermaid (version 2.1.0 -> 2.1.1)` on first load. This is the normal version-change notice.
+
+## 2.1.0
+
+### Highlights
+
+- Added functional automatic combat executors for bows, crossbows, tridents, Touhou danmaku, TACZ firearms, and Iron's Spells 'n Spellbooks.
+- Expanded player maid work modes with real crop planting, crop harvesting, sugar cane planting, and sugar cane harvesting.
+- Improved projectile aiming with low-arc ballistic compensation so arrows reliably hit targets at medium and long range.
+- Fixed Loyalty-enchanted tridents duplicating when thrown and returned.
+- Improved native Maid GUI task synchronization and automatic work activation.
+
+### Ranged Combat
+
+- Added real arrow projectiles for automatic bow and crossbow attacks.
+- Added real thrown trident entities with enchantment and durability handling.
+- Added targeted Touhou danmaku attacks using the equipped Hakurei Gohei.
+- Bows, crossbows, tridents, and gohei must now be equipped in the main hand instead of being activated remotely from the inventory.
+- Automatic ranged attacks pause while the player is actively using an item.
+- Melee and ranged attacks now share the player's attack-strength cadence, preventing simultaneous sword, bow, and crossbow attack loops.
+- Crossbows now perform an initial loading phase and respect the Quick Charge enchantment.
+- Added low-trajectory ballistic aiming based on projectile speed, distance, target height, and gravity.
+- Improved target filtering to require a living, visible, hostile entity within the configured combat range.
+
+### Trident Fixes
+
+- Fixed Loyalty tridents leaving the original item in the main hand while also returning the thrown copy.
+- A Loyalty trident is now removed from the main hand after a successful throw and returned by its projectile entity.
+- Durability loss is applied to the returning trident stack.
+- Non-Loyalty tridents retain the existing automatic-throw behavior and consume durability normally.
+- Riptide tridents remain excluded from automatic ranged throwing.
+
+### Farming and Gathering
+
+- Normal farming now harvests mature vanilla crops and restores them to their initial growth state.
+- Player maids can now plant compatible Forge crop seeds on nearby empty farmland.
+- Basic planting and harvesting are no longer completely blocked when no hoe is present.
+- Sugar cane work no longer incorrectly requires a hoe.
+- Sugar cane harvesting now skips isolated one-block plants and selects a plant with a harvestable upper segment.
+- Harvesting preserves the bottom sugar cane block so the plant can regrow.
+- Player maids can plant sugar cane from their inventory on suitable soil next to water.
+- Added functional executors for melon and pumpkin harvesting, mature cocoa harvesting, honey collection, grass clearing, snow clearing, sheep shearing, and cow milking.
+- Added clearer work-status messages when a required item or valid nearby target is missing.
+
+### Mod Compatibility
+
+- Added optional automatic firearm support for Timeless and Classics Zero (TACZ).
+- TACZ attacks use a valid gun in the main hand, respect available ammunition, attempt reloading, and report missing or failed compatibility states.
+- Added optional spell-combat support for Iron's Spells 'n Spellbooks.
+- Spell tasks use the currently selected spell and respect mana, cast conditions, cast time, and cooldowns.
+- Added mappings for the `maidspell:spell_combat_far` and `maidspell:spell_combat_melee` task IDs.
+- Improved optional Curios integration and inventory-screen compatibility.
+
+### Task and GUI Synchronization
+
+- Selecting a supported task through the native Touhou Maid GUI now enables automatic work for that task.
+- Updated work descriptions to state main-hand weapon, ammunition, seed, farmland, and planting requirements more clearly.
+- Combat modes now run every tick while still respecting weapon, item-use, attack-strength, loading, and cooldown restrictions.
+- Non-combat work continues to respect the configured automatic work interval and schedule.
+- Fishing and board-game modes retain their task mapping and display an execution notice when manual interaction is required.
+
+### Reliability and Testing
+
+- Added unit coverage for spell task mapping, combat executor registration, work hints, and low-arc projectile compensation.
+- Added a comprehensive 2.0/2.1 integration test checklist and a dedicated test-server launcher.
+- Added mod icon and updated Forge metadata for the 2.1.0 release.
+- Verified compilation, unit tests, reobfuscation, and the final Forge build on Minecraft 1.20.1.
+
 ## 2.0.0
 
 ### Highlights

@@ -23,7 +23,7 @@ import java.util.function.Supplier;
 
 /** 玩家女仆主界面的服务端权威操作与快照同步。 */
 public final class MaidNetwork {
-    private static final String VERSION = "3";
+    private static final String VERSION = "4";
     private static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(PlayerMaid.MOD_ID, "maid_ui"))
             .networkProtocolVersion(() -> VERSION)
@@ -37,7 +37,12 @@ public final class MaidNetwork {
         TOGGLE_HOME, TOGGLE_PICKUP, TOGGLE_RIDE, CYCLE_SCHEDULE, TOGGLE_AUTO, NEXT_TASK, SELECT_TASK,
         TOGGLE_SHOW_BACKPACK, TOGGLE_SHOW_BACK_ITEM, TOGGLE_CHAT_BUBBLE,
         SOUND_DOWN, SOUND_UP, CYCLE_PICK_TYPE, TOGGLE_DOOR, TOGGLE_GATE, TOGGLE_CLIMBING,
-        REFRESH
+        RANGE_DOWN, RANGE_UP, RANGE_UNLIMITED, TOGGLE_GUN_AUTO_FIRE, REFRESH
+    }
+
+    /** 玩家女仆对自身生效的自助操作，由按键触发，不要求打开任何界面。 */
+    public enum SelfAction {
+        TOGGLE_GUN_AUTO_FIRE, CYCLE_ACTIVITY_RANGE
     }
 
     public record Snapshot(UUID maidId, String maidName, boolean home, boolean pickup, boolean rideable,
@@ -47,7 +52,7 @@ public final class MaidNetwork {
                            int soundFreq, int pickType, boolean openDoor, boolean openFenceGate,
                            boolean activeClimbing, float health, float maxHealth, int armor, int experienceLevel,
                            int favorability, int bondLevel, int bondPoints, AddonRelationshipData.RelationStage relation,
-                           AddonRelationshipData.MoodLevel mood) {
+                           AddonRelationshipData.MoodLevel mood, boolean gunAutoFire, String activityRange) {
         static Snapshot of(ServerPlayer maid) {
             return new Snapshot(maid.getUUID(), maid.getGameProfile().getName(),
                     MaidData.mode(maid) == MaidData.Mode.STAY, MaidData.pickup(maid), MaidData.rideable(maid),
@@ -59,7 +64,8 @@ public final class MaidNetwork {
                     MaidData.openFenceGate(maid), MaidData.activeClimbing(maid), maid.getHealth(), maid.getMaxHealth(),
                     maid.getArmorValue(), maid.experienceLevel, AddonRelationshipData.favorability(maid),
                     AddonRelationshipData.bondLevel(maid), AddonRelationshipData.availableBondPoints(maid),
-                    AddonRelationshipData.relationStage(maid), AddonRelationshipData.moodLevel(maid));
+                    AddonRelationshipData.relationStage(maid), AddonRelationshipData.moodLevel(maid),
+                    MaidData.gunAutoFire(maid), MaidData.activityRangeText(maid));
         }
     }
 
@@ -68,6 +74,8 @@ public final class MaidNetwork {
                 .encoder(ActionPacket::encode).decoder(ActionPacket::decode).consumerMainThread(ActionPacket::handle).add();
         CHANNEL.messageBuilder(SnapshotPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(SnapshotPacket::encode).decoder(SnapshotPacket::decode).consumerMainThread(SnapshotPacket::handle).add();
+        CHANNEL.messageBuilder(SelfActionPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(SelfActionPacket::encode).decoder(SelfActionPacket::decode).consumerMainThread(SelfActionPacket::handle).add();
     }
 
     public static void sendAction(UUID maidId, Action action) {
@@ -76,6 +84,11 @@ public final class MaidNetwork {
 
     public static void sendAction(UUID maidId, Action action, int value) {
         CHANNEL.sendToServer(new ActionPacket(maidId, action, value));
+    }
+
+    /** 女仆侧按键通道：只操作发送者自身的数据，不需要打开任何容器。 */
+    public static void sendSelfAction(SelfAction action) {
+        CHANNEL.sendToServer(new SelfActionPacket(action));
     }
 
     public static void sendSnapshot(ServerPlayer owner, ServerPlayer maid) {
@@ -148,11 +161,45 @@ public final class MaidNetwork {
                 case TOGGLE_DOOR -> { if (MaidConfig.MAID_UI_ENABLE_DOOR_INTERACTION.get()) MaidData.setOpenDoor(maid, !MaidData.openDoor(maid)); }
                 case TOGGLE_GATE -> { if (MaidConfig.MAID_UI_ENABLE_FENCE_GATE_INTERACTION.get()) MaidData.setOpenFenceGate(maid, !MaidData.openFenceGate(maid)); }
                 case TOGGLE_CLIMBING -> { if (MaidConfig.MAID_UI_ENABLE_ACTIVE_CLIMBING.get()) MaidData.setActiveClimbing(maid, !MaidData.activeClimbing(maid)); }
+                case RANGE_DOWN -> MaidData.stepActivityRange(maid, -1);
+                case RANGE_UP -> MaidData.stepActivityRange(maid, 1);
+                case RANGE_UNLIMITED -> MaidData.applyActivityRange(maid, MaidData.UNLIMITED_ACTIVITY_RANGE);
+                case TOGGLE_GUN_AUTO_FIRE -> TaczGunCompat.toggleAutoFire(maid);
                 case REFRESH -> { }
             }
             if (owner.containerMenu instanceof MaidInventoryMenu current && current.getMaidId().equals(maid.getUUID())) {
                 current.broadcastChanges();
                 sendSnapshot(owner, maid);
+            }
+        }
+    }
+
+    /**
+     * 女仆侧自助操作。与 ActionPacket 不同，这里不要求发送者打开 MaidInventoryMenu，
+     * 只校验发送者本身是一名玩家女仆，并且只作用于发送者自己的数据。
+     */
+    private record SelfActionPacket(SelfAction action) {
+        static void encode(SelfActionPacket packet, FriendlyByteBuf buffer) {
+            buffer.writeEnum(packet.action);
+        }
+        static SelfActionPacket decode(FriendlyByteBuf buffer) {
+            return new SelfActionPacket(buffer.readEnum(SelfAction.class));
+        }
+        static void handle(SelfActionPacket packet, Supplier<NetworkEvent.Context> supplier) {
+            NetworkEvent.Context context = supplier.get();
+            ServerPlayer maid = context.getSender();
+            if (maid == null || !MaidData.isMaid(maid)) return;
+            switch (packet.action) {
+                case TOGGLE_GUN_AUTO_FIRE -> {
+                    boolean enabled = TaczGunCompat.toggleAutoFire(maid);
+                    maid.displayClientMessage(Component.literal("TACZ 枪械自动开火：" + (enabled ? "开启" : "关闭"))
+                            .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.YELLOW), true);
+                }
+                case CYCLE_ACTIVITY_RANGE -> {
+                    MaidData.stepActivityRange(maid, 1);
+                    maid.displayClientMessage(Component.literal("活动范围：" + MaidData.activityRangeText(maid))
+                            .withStyle(ChatFormatting.AQUA), true);
+                }
             }
         }
     }
@@ -175,6 +222,7 @@ public final class MaidNetwork {
             b.writeBoolean(s.openFenceGate); b.writeBoolean(s.activeClimbing); b.writeFloat(s.health); b.writeFloat(s.maxHealth);
             b.writeVarInt(s.armor); b.writeVarInt(s.experienceLevel); b.writeVarInt(s.favorability); b.writeVarInt(s.bondLevel);
             b.writeVarInt(s.bondPoints); b.writeEnum(s.relation); b.writeEnum(s.mood);
+            b.writeBoolean(s.gunAutoFire); b.writeUtf(s.activityRange);
         }
         static SnapshotPacket decode(FriendlyByteBuf b) {
             return new SnapshotPacket(new Snapshot(b.readUUID(), b.readUtf(64), b.readBoolean(), b.readBoolean(),
@@ -183,7 +231,7 @@ public final class MaidNetwork {
                     b.readBoolean(), b.readBoolean(), b.readBoolean(), b.readVarInt(), b.readVarInt(), b.readBoolean(),
                     b.readBoolean(), b.readBoolean(), b.readFloat(), b.readFloat(), b.readVarInt(), b.readVarInt(),
                     b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readEnum(AddonRelationshipData.RelationStage.class),
-                    b.readEnum(AddonRelationshipData.MoodLevel.class)));
+                    b.readEnum(AddonRelationshipData.MoodLevel.class), b.readBoolean(), b.readUtf(32)));
         }
         static void handle(SnapshotPacket packet, Supplier<NetworkEvent.Context> supplier) {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientSnapshots.accept(packet.snapshot));

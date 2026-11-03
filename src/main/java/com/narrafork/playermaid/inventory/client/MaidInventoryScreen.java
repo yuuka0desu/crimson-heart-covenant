@@ -75,6 +75,10 @@ public final class MaidInventoryScreen extends AbstractContainerScreen<MaidInven
                 addActionButton(55, 115, 92, Component.translatable("screen.playermaid.config.door"), MaidNetwork.Action.TOGGLE_DOOR);
                 addActionButton(151, 115, 92, Component.translatable("screen.playermaid.config.gate"), MaidNetwork.Action.TOGGLE_GATE);
                 addActionButton(55, 139, 188, Component.translatable("screen.playermaid.config.climb"), MaidNetwork.Action.TOGGLE_CLIMBING);
+                addActionButton(55, 163, 92, Component.translatable("screen.playermaid.button.range_down"), MaidNetwork.Action.RANGE_DOWN);
+                addActionButton(151, 163, 92, Component.translatable("screen.playermaid.button.range_up"), MaidNetwork.Action.RANGE_UP);
+                addActionButton(55, 185, 92, Component.translatable("screen.playermaid.button.range_unlimited"), MaidNetwork.Action.RANGE_UNLIMITED);
+                addActionButton(151, 185, 92, Component.translatable("screen.playermaid.button.gun_auto"), MaidNetwork.Action.TOGGLE_GUN_AUTO_FIRE);
             }
             default -> { }
         }
@@ -137,8 +141,11 @@ public final class MaidInventoryScreen extends AbstractContainerScreen<MaidInven
             }
             case CONFIG -> {
                 graphics.drawString(font, Component.translatable("screen.playermaid.config.sound", snapshot.soundFreq()), 151, 58, color, false);
-                graphics.drawString(font, Component.translatable("screen.playermaid.config.picktype.state", snapshot.pickType()), 58, 179, color, false);
-                graphics.drawString(font, Component.translatable("screen.playermaid.config.state", onOff(snapshot.showBackpack()), onOff(snapshot.showBackItem()), onOff(snapshot.showChatBubble()), onOff(snapshot.openDoor()), onOff(snapshot.openFenceGate()), onOff(snapshot.activeClimbing())), 55, 198, color, false);
+                graphics.drawString(font, Component.translatable("screen.playermaid.label.range", snapshot.activityRange()), 55, 210, color, false);
+                graphics.drawString(font, Component.translatable("screen.playermaid.label.gun_mode",
+                        Component.translatable(snapshot.gunAutoFire() ? "screen.playermaid.gun_mode.on" : "screen.playermaid.gun_mode.off")), 55, 222, color, false);
+                graphics.drawString(font, Component.translatable("screen.playermaid.config.picktype.state", snapshot.pickType()), 55, 234, color, false);
+                graphics.drawString(font, Component.translatable("screen.playermaid.config.state", onOff(snapshot.showBackpack()), onOff(snapshot.showBackItem()), onOff(snapshot.showChatBubble()), onOff(snapshot.openDoor()), onOff(snapshot.openFenceGate()), onOff(snapshot.activeClimbing())), 55, 246, color, false);
             }
             default -> graphics.drawString(font, Component.translatable("screen.playermaid.owner_inventory"), 47, 143, color, false);
         }

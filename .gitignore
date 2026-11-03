@@ -6,6 +6,7 @@ out/
 # Local Minecraft run directories
 run/
 run-server/
+compat-needsofnature/run-production-server/
 logs/
 crash-reports/
 
@@ -16,6 +17,7 @@ crash-reports/
 
 # Local dependency binaries
 libs/*.jar
+**/libs/*.jar
 
 # Secrets and credentials
 .env
@@ -33,5 +35,6 @@ secrets*.json
 .DS_Store
 Thumbs.db
 
-# JVM crash logs
+# JVM and installer logs
 hs_err_pid*.log
+forge-*-installer.jar.log

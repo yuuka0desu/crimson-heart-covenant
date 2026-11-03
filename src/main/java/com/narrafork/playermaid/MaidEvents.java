@@ -58,6 +58,9 @@ public final class MaidEvents {
             return;
         }
 
+        // 兼容模组自己的工具物品拥有独立右键语义，交回对应模组处理，避免只弹出女仆界面。
+        if (MaidMarriageCompat.isCompatTool(owner.getMainHandItem())) return;
+
         if (RelationshipService.canManage(owner, target)) {
             if (!NativeMaidGuiBridge.open(owner, target)) {
                 owner.sendSystemMessage(Component.literal("当前不能打开玩家女仆原生面板。").withStyle(ChatFormatting.RED));
@@ -201,6 +204,12 @@ public final class MaidEvents {
     public void onLivingHurt(LivingHurtEvent event) {
         MaidBaubleEffects.onHurt(event);
         if (event.isCanceled()) return;
+        // 怒气只在实际造成伤害时累积；被友伤保护取消的攻击不再计入。
+        if (event.getEntity() instanceof ServerPlayer maid
+                && event.getSource().getEntity() instanceof ServerPlayer attacker
+                && MaidData.isMaid(maid)) {
+            LittleMadCompat.onHurt(maid, attacker);
+        }
         TouhouMaidAffectionCompat.onOwnerHurt(event);
         WorkManager.applyDamageBonus(event);
         LittleMadCompat.applyDamageMultiplier(event);
@@ -223,9 +232,9 @@ public final class MaidEvents {
 
     @SubscribeEvent
     public void onLivingAttack(LivingAttackEvent event) {
-        if (event.getEntity() instanceof ServerPlayer maid && event.getSource().getEntity() instanceof ServerPlayer attacker
-                && MaidData.isMaid(maid)) {
-            LittleMadCompat.onHurt(maid, attacker);
+        if (isFriendlyProjectileHit(event)) {
+            event.setCanceled(true);
+            return;
         }
         if (!MaidConfig.PREVENT_FRIENDLY_FIRE.get() || !(event.getEntity() instanceof ServerPlayer victim)
                 || !(event.getSource().getEntity() instanceof ServerPlayer attacker)) {
@@ -238,12 +247,26 @@ public final class MaidEvents {
         }
     }
 
+    /**
+     * 女仆射出的投射物命中主人（或反弹回女仆自身）时取消伤害。
+     * 判定依据是发射时写入投射物 NBT 的主人 UUID，不依赖飞行途中的实时关系查询，
+     * 因此女仆死亡、契约解除或离线都不会让已在空中的投射物恢复伤害。
+     */
+    private static boolean isFriendlyProjectileHit(LivingAttackEvent event) {
+        if (!MaidConfig.PREVENT_FRIENDLY_FIRE.get() || !(event.getEntity() instanceof ServerPlayer victim)) return false;
+        var direct = event.getSource().getDirectEntity();
+        if (direct == null || direct == event.getSource().getEntity()) return false;
+        return RangedCombatExecutor.taggedOwner(direct).filter(victim.getUUID()::equals).isPresent();
+    }
+
     @SubscribeEvent
     public void onClone(PlayerEvent.Clone event) {
         CompoundTag oldPersisted = event.getOriginal().getPersistentData().getCompound(Player.PERSISTED_NBT_TAG);
         if (!oldPersisted.isEmpty()) {
             event.getEntity().getPersistentData().put(Player.PERSISTED_NBT_TAG, oldPersisted.copy());
         }
+        // 死亡克隆会换成新的实体实例，旧镜像实体不再对应任何在线女仆。
+        AddonBaubleCompat.forget(event.getOriginal().getUUID());
     }
 
     @SubscribeEvent
@@ -256,6 +279,7 @@ public final class MaidEvents {
         MaidRequests.removeFor(event.getEntity().getUUID());
         AddonInteractions.removeFor(event.getEntity().getUUID());
         NativeMaidGuiBridge.closeFor(event.getEntity().getUUID());
+        AddonBaubleCompat.forget(event.getEntity().getUUID());
     }
 
     @SubscribeEvent
