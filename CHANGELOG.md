@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.3
+
+Maid entity friendly-fire fix.
+
+### Fixed
+
+- Fixed Touhou Little Maid entity (`EntityMaid`) attacks being able to damage their own owner. The friendly-fire guard in `LivingAttackEvent` only matched `ServerPlayer` attackers, so damage coming from a maid entity was skipped entirely — including arrows the maid had fired earlier, which is why those arrows could still kill the owner after the maid died.
+- Melee hits and projectiles originating from a maid entity are now cancelled when the victim is that maid's owner, together with a short action-bar notice.
+- The new check is still gated by `preventFriendlyFire`, so packs that intentionally allow friendly fire keep the previous behaviour.
+
+### Notes
+
+- No configuration keys or network protocol changes in this release; existing `2.1.2` worlds and clients only need the mod jar updated.
+- Server and client must still run the same version because the mod declares `displayTest="MATCH_VERSION"`.
+
 ## 2.1.2
 
 Addon accessory compatibility.

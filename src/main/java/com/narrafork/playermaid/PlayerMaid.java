@@ -32,7 +32,14 @@ public final class PlayerMaid {
             MinecraftForge.EVENT_BUS.addListener(com.narrafork.playermaid.inventory.client.MaidKeys::onClientTick);
         });
         MinecraftForge.EVENT_BUS.register(new MaidEvents());
-        LOGGER.info("车万女仆：绯心待契 2.1.1 已加载");
+        LOGGER.info("车万女仆：绯心待契 {} 已加载", version());
+    }
+
+    /** 读取 mods.toml 中的实际版本，避免日志里的版本号写死后与发布版本脱节。 */
+    private static String version() {
+        return net.minecraftforge.fml.ModList.get().getModContainerById(MOD_ID)
+                .map(container -> container.getModInfo().getVersion().toString())
+                .orElse("dev");
     }
 
     private void onEntityAttributes(net.minecraftforge.event.entity.EntityAttributeCreationEvent event) {

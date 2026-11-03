@@ -232,17 +232,30 @@ public final class MaidEvents {
 
     @SubscribeEvent
     public void onLivingAttack(LivingAttackEvent event) {
+        if (!MaidConfig.PREVENT_FRIENDLY_FIRE.get()) return;
         if (isFriendlyProjectileHit(event)) {
             event.setCanceled(true);
             return;
         }
-        if (!MaidConfig.PREVENT_FRIENDLY_FIRE.get() || !(event.getEntity() instanceof ServerPlayer victim)
-                || !(event.getSource().getEntity() instanceof ServerPlayer attacker)) {
-            return;
-        }
-        if (RelationshipService.canManage(attacker, victim) || RelationshipService.canManage(victim, attacker)) {
+        if (!(event.getEntity() instanceof ServerPlayer victim)) return;
+
+        // 玩家女仆与主人之间的互相伤害。
+        if (event.getSource().getEntity() instanceof ServerPlayer attacker
+                && (RelationshipService.canManage(attacker, victim) || RelationshipService.canManage(victim, attacker))) {
             event.setCanceled(true);
             attacker.displayClientMessage(Component.literal("主人与自己的女仆之间已关闭友伤。")
+                    .withStyle(ChatFormatting.YELLOW), true);
+            return;
+        }
+
+        // 车万女仆实体与其主人：近战和它射出的箭矢都不得伤害主人。
+        // 此前这里只匹配 ServerPlayer 攻击者，EntityMaid 的伤害会整体漏过，
+        // 表现为「女仆死后此前射出的箭可以杀死玩家」。
+        if (event.getSource().getEntity() instanceof EntityMaid attacker
+                && attacker.getOwnerUUID() != null
+                && attacker.getOwnerUUID().equals(victim.getUUID())) {
+            event.setCanceled(true);
+            victim.displayClientMessage(Component.literal("你的女仆不会伤害你。")
                     .withStyle(ChatFormatting.YELLOW), true);
         }
     }
