@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.1.2
+
+Addon accessory compatibility.
+
+### Added
+
+- Added a compatibility layer that runs Touhou Little Maid bauble hooks for player maids. Touhou Little Maid only invokes `IMaidBauble` on `EntityMaid` instances, so accessories registered by addon mods could be placed in a player maid's bauble slots but their behaviour never executed. The new layer dispatches `onTick`, `onInjured`, `onDeath`, `onPutOn`, and `onTakeOff` for any bauble resolved through `BaubleManager.getBauble(ItemStack)`, which covers every addon that registers through the official TLM API.
+- Hook dispatch runs against a detached `EntityMaid` proxy that mirrors the player maid's position, rotation, tick count, health, potion effects, and burning state. Potion effects and burning applied by a hook are copied back to the real player, so accessories that buff the wearer actually take effect.
+- Bauble equipment changes are tracked per slot, firing `onTakeOff` for the removed item and `onPutOn` for the new one in the same order the vanilla implementation uses.
+- `onInjured` receives a mutable damage value, so damage-modifying accessories work and cancelling accessories still cancel the hit. `onDeath` can veto a lethal hit.
+- Verified coexistence with the accessory registrations of Heart Pact (`GrowthPauseHairpinBauble`), Maid Beacon (`BeaconEffectGeneratorBauble`), and SolMaid.
+- Added an `addonBaubleCompat` option (default `true`) to disable the layer for packs that prefer the previous behaviour.
+
+### Compatibility notes
+
+- Baubles in the `touhou_little_maid` namespace are skipped by the new layer. Touhou Little Maid's own accessories remain handled by the existing native implementation, so no effect runs twice.
+- The layer is applied per bauble with isolated error handling; a misbehaving addon accessory logs a single warning instead of interrupting the server tick.
+- Mirrored proxies are released when the owner logs out or when the player maid is cloned on death.
+- Addons that query their own state through helpers such as `isWornBy(EntityMaid)` from their own event handlers only ever see `EntityMaid` instances. Their TLM bauble hooks now run, but those self-queries cannot observe a player maid without changes on their side.
+
 ## 2.1.1
 
 ### 修复内容（中文）
@@ -17,12 +37,6 @@
 - 在原生面板中开放活动范围设置，可调小、调大或设为无限制；女仆本人也可用「循环切换活动范围」按键调整。
 - 更新女仆界面网络协议版本，并补齐中英文按键与按钮文案。
 
-### 新增（中文）
-
-- 新增其它女仆附属模组的饰品兼容层。附属通过车万女仆 `BaubleManager` 注册的饰品，其 `onTick`、`onInjured`、`onDeath`、`onPutOn`、`onTakeOff` 钩子现在会对玩家女仆执行。实现方式是镜像一个脱管的 `EntityMaid` 代理并回写药水效果与燃烧状态，车万女仆本体的饰品仍由原有原生实现处理，不会重复生效。
-- 新增 `addonBaubleCompat` 选项（默认 `true`）用于关闭该兼容层。
-- 已验证与心契同眠（Heart Pact）、Maid Beacon、SolMaid 的饰品注册共存；兼容层对未安装的附属无副作用。
-
 ### Bug Fixes (English)
 
 - Fixed TACZ firearms never firing automatically. The gun draw animation was restarted every tick, so `shoot` permanently reported `IS_DRAWING` and the maid stayed in a waiting state while the weapon also refused manual fire. The draw animation is now performed once per deployment and the shot pitch/yaw arguments follow the TACZ signature order.
@@ -37,12 +51,6 @@
 - Fixed player maids being unable to fly the Touhou Little Maid broom. The broom required an `EntityMaid` companion passenger, which a player maid never satisfies.
 - Exposed the maid activity range in the native panel. Range can be stepped down, stepped up, or set to unlimited, and a `Cycle Activity Range` key is available for the maid's own client.
 - Updated the maid GUI network protocol version and added Chinese/English key and button labels.
-
-### Added (English)
-
-- Added a compatibility layer for accessories registered by other Touhou Little Maid addons. For addon baubles registered through TLM's `BaubleManager`, the `onTick`, `onInjured`, `onDeath`, `onPutOn`, and `onTakeOff` hooks now run for player maids. The implementation mirrors a detached `EntityMaid` proxy and copies potion effects and burning state back to the real player. Touhou Little Maid's own baubles are still handled by the existing native implementation and never run twice.
-- Added an `addonBaubleCompat` option (default `true`) to disable the layer.
-- Verified coexistence with the accessory registrations of Heart Pact, Maid Beacon, and SolMaid; the layer has no effect when an addon is absent.
 
 ### 兼容与升级说明（中文）
 
